@@ -80,7 +80,7 @@ def extract_with_gemini(prompt: str, attached_file_content: str = None) -> dict:
         )
         
         response = client.models.generate_content(
-            model="gemini-1.5-pro",
+            model="gemini-2.0-flash-exp",  # Use available model
             contents=user_prompt,
             config=config
         )

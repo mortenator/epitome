@@ -9,6 +9,14 @@ import os
 import re
 from datetime import datetime
 from typing import Callable, Optional
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, continue without it
+
 from google import genai
 from .prompts import EPITOME_EXTRACTION_SYSTEM_PROMPT
 from .enrichment import enrich_production_data
@@ -95,8 +103,16 @@ class EpitomeWorkbookGenerator:
 
         # Header Info
         prod_info = self.data.get('production_info', {})
-        ws.write('A1', f"JOB: {prod_info.get('job_name', 'TBD')}", self.formats['title_large'])
-        ws.write('A2', f"CLIENT: {prod_info.get('client', 'TBD')}")
+        job_name = prod_info.get('job_name', 'TBD')
+        job_number = prod_info.get('job_number', '')
+        client = prod_info.get('client', 'TBD')
+        
+        ws.write('A1', f"JOB: {job_name}", self.formats['title_large'])
+        if job_number and job_number != 'TBD':
+            ws.write('A2', f"JOB #: {job_number}")
+            ws.write('A3', f"CLIENT: {client}")
+        else:
+            ws.write('A2', f"CLIENT: {client}")
 
         # Table Headers
         headers = ['Role', 'Name', 'Phone', 'Email', 'Rate', 'Notes']
@@ -616,10 +632,22 @@ def _extract_json_from_response(text: str) -> dict:
     if json_match:
         json_str = json_match.group(1)
     else:
-        # Assume the entire response is JSON
-        json_str = text.strip()
-
-    return json.loads(json_str)
+        # Try to find JSON object in the text
+        # Look for first { and last }
+        start_idx = text.find('{')
+        end_idx = text.rfind('}')
+        if start_idx >= 0 and end_idx > start_idx:
+            json_str = text[start_idx:end_idx+1]
+        else:
+            # Assume the entire response is JSON
+            json_str = text.strip()
+    
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Failed to parse JSON: {e}")
+        print(f"[ERROR] JSON string (first 1000 chars): {json_str[:1000]}")
+        raise ValueError(f"Invalid JSON response from LLM: {e}")
 
 
 def _get_api_key() -> str:
@@ -668,10 +696,15 @@ def run_tool(
 
     # Stage 1: Analyzing file (if provided)
     if attached_file_content:
-        emit("analyzing_file", 5, "Analyzing file...")
+        emit("analyzing_file", 5, "Analyzing uploaded file...")
+        # Count content length to estimate processing time
+        content_length = len(attached_file_content) if attached_file_content else 0
+        if content_length > 1000:
+            emit("analyzing_file", 8, f"Processing file content ({content_length:,} characters)...")
+        emit("analyzing_file", 12, "File content prepared for extraction")
 
     # Stage 2: Understanding prompt
-    emit("understanding_prompt", 15, "Understanding prompt...")
+    emit("understanding_prompt", 18, "Understanding prompt...")
 
     # Get API key and initialize client
     api_key = _get_api_key()
@@ -684,28 +717,65 @@ def run_tool(
     if attached_file_content:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"
 
-    # Stage 3: Extracting data
-    emit("extracting_data", 30, "Extracting production information...")
+    # Stage 3: Extracting data with LLM
+    emit("extracting_data", 25, "Sending to AI for extraction...")
+    emit("extracting_data", 35, "AI is analyzing and extracting production data...")
+    
+    # Show progress during API call (this is where most time is spent)
+    if attached_file_content and len(attached_file_content) > 5000:
+        emit("extracting_data", 40, "Processing large file content with AI...")
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",  # Faster than 2.0-flash
-        contents=[
-            {"role": "user", "parts": [{"text": EPITOME_EXTRACTION_SYSTEM_PROMPT}]},
-            {"role": "model", "parts": [{"text": "I understand. I will extract production data from user requests and return structured JSON following the schema you provided. I'm ready to process requests."}]},
-            {"role": "user", "parts": [{"text": user_message}]}
-        ],
-        config={"temperature": 0}  # Deterministic output, slightly faster
+    # Use system instruction for better compatibility
+    from google.genai import types
+    
+    config = types.GenerateContentConfig(
+        temperature=0.2,
+        maxOutputTokens=4096,
+        systemInstruction=EPITOME_EXTRACTION_SYSTEM_PROMPT,
     )
+    
+    emit("extracting_data", 50, "Calling Gemini API...")
+    
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-exp",  # Use available model
+        contents=user_message,
+        config=config
+    )
+    
+    emit("extracting_data", 65, "Received response from AI, parsing...")
 
+    emit("extracting_data", 60, "Parsing extracted data...")
+    
     # Extract JSON from response
     response_text = response.text
-    extracted_data = _extract_json_from_response(response_text)
+    
+    # Debug: Log the response (first 500 chars)
+    print(f"\n[DEBUG] Gemini response (first 500 chars): {response_text[:500]}")
+    
+    try:
+        extracted_data = _extract_json_from_response(response_text)
+        print(f"[DEBUG] Extracted data keys: {list(extracted_data.keys())}")
+        print(f"[DEBUG] Job name: {extracted_data.get('production_info', {}).get('job_name', 'N/A')}")
+        print(f"[DEBUG] Crew count: {len(extracted_data.get('crew_list', []))}")
+    except Exception as e:
+        print(f"[ERROR] Failed to parse JSON: {e}")
+        print(f"[ERROR] Response text: {response_text[:1000]}")
+        raise
+    
+    emit("extracting_data", 70, "Data extraction complete")
 
     # Stage 4-6: Enrich data with external APIs (sub-progress in enrichment.py)
     if enrich:
         enriched_data = enrich_production_data(extracted_data, progress_callback=progress_callback)
     else:
         enriched_data = extracted_data
+    
+    # Debug: Verify data before generating workbook
+    print(f"[DEBUG] Before workbook generation:")
+    print(f"[DEBUG]   Job name: {enriched_data.get('production_info', {}).get('job_name', 'N/A')}")
+    print(f"[DEBUG]   Job number: {enriched_data.get('production_info', {}).get('job_number', 'N/A')}")
+    print(f"[DEBUG]   Crew count: {len(enriched_data.get('crew_list', []))}")
+    print(f"[DEBUG]   Schedule days: {len(enriched_data.get('schedule_days', []))}")
 
     # Stage 7: Generate workbook
     emit("generating", 90, "Generating workbook...")

@@ -88,13 +88,29 @@ async def generate_workbook(
         if file.filename.endswith('.csv') or file.filename.endswith('.txt'):
             file_content = content.decode('utf-8', errors='ignore')
         elif file.filename.endswith('.pdf'):
-            # For PDF, note it's attached (full PDF parsing would need additional library)
-            file_content = f"[PDF file attached: {file.filename}]\n"
-            # Try basic text extraction
+            # Properly extract text from PDF
             try:
-                file_content += content.decode('utf-8', errors='ignore')
-            except Exception:
-                pass
+                import io
+                import PyPDF2
+                
+                pdf_file = io.BytesIO(content)
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                
+                # Extract text from all pages
+                extracted_text = []
+                for page_num, page in enumerate(pdf_reader.pages, 1):
+                    page_text = page.extract_text()
+                    if page_text.strip():
+                        extracted_text.append(f"--- Page {page_num} ---\n{page_text}")
+                
+                if extracted_text:
+                    file_content = f"[PDF file: {file.filename}]\n\n" + "\n\n".join(extracted_text)
+                else:
+                    file_content = f"[PDF file: {file.filename} - No extractable text found]"
+                    
+            except Exception as e:
+                # Fallback if PDF parsing fails
+                file_content = f"[PDF file: {file.filename} - Error extracting text: {str(e)}]"
         else:
             file_content = content.decode('utf-8', errors='ignore')
 
