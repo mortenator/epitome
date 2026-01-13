@@ -8,6 +8,7 @@ import json
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -16,6 +17,11 @@ from typing import Callable, Optional
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyA6mVUzywV5QPinsPqLbjWWqagKuAt60q4')
 LOGO_DEV_API_KEY = os.environ.get('LOGO_DEV_API_KEY', 'sk_Fte_TcDzRCat_8TjFUZrLw')
 EXA_API_KEY = os.environ.get('EXA_API_KEY', '6e024e51-4d72-4545-88cc-5032b77b7443')
+
+# In-memory caches for performance
+_geocode_cache = {}  # address -> coords dict
+_weather_cache = {}  # (lat, lng, date) -> weather dict
+_logo_cache = {}     # company_name -> logo_url
 
 
 def get_location_coordinates(address: str) -> Optional[dict]:
@@ -31,6 +37,11 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     if not address or address.upper() == 'TBD':
         return None
 
+    # Check cache first
+    cache_key = address.lower().strip()
+    if cache_key in _geocode_cache:
+        return _geocode_cache[cache_key]
+
     try:
         params = urllib.parse.urlencode({
             'address': address,
@@ -44,11 +55,14 @@ def get_location_coordinates(address: str) -> Optional[dict]:
         if data.get('status') == 'OK' and data.get('results'):
             result = data['results'][0]
             location = result['geometry']['location']
-            return {
+            coords = {
                 'lat': location['lat'],
                 'lng': location['lng'],
                 'formatted_address': result.get('formatted_address', address)
             }
+            # Cache the result
+            _geocode_cache[cache_key] = coords
+            return coords
     except Exception as e:
         print(f"Warning: Failed to geocode address '{address}': {e}")
 
@@ -67,6 +81,11 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     Returns:
         Dict with weather info, or None if failed
     """
+    # Check cache first (round coords to 2 decimals for cache key)
+    cache_key = (round(lat, 2), round(lng, 2), date)
+    if cache_key in _weather_cache:
+        return _weather_cache[cache_key]
+
     try:
         # Parse the date
         target_date = datetime.strptime(date, '%Y-%m-%d')
@@ -131,7 +150,7 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             temp_low = daily.get('temperature_2m_min', [None])[0]
             wind = daily.get('windspeed_10m_max', [None])[0]
 
-            return {
+            weather_result = {
                 'date': date,
                 'sunrise': sunrise,
                 'sunset': sunset,
@@ -142,6 +161,9 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
                 'conditions': conditions,
                 'wind': f"{round(wind)} mph" if wind else 'TBD'
             }
+            # Cache the result
+            _weather_cache[cache_key] = weather_result
+            return weather_result
     except Exception as e:
         print(f"Warning: Failed to get weather data: {e}")
 
@@ -160,6 +182,11 @@ def get_company_logo(company_name: str) -> Optional[str]:
     """
     if not company_name or company_name.upper() == 'TBD':
         return None
+
+    # Check cache first
+    cache_key = company_name.lower().strip()
+    if cache_key in _logo_cache:
+        return _logo_cache[cache_key]
 
     try:
         # Convert company name to likely domain
@@ -192,7 +219,8 @@ def get_company_logo(company_name: str) -> Optional[str]:
         # logo.dev URL format - use the simple format
         logo_url = f"https://img.logo.dev/{domain}?token={LOGO_DEV_API_KEY}&size=200"
 
-        # Return the URL directly - the frontend can handle 404s
+        # Cache and return the URL - the frontend can handle 404s
+        _logo_cache[cache_key] = logo_url
         return logo_url
 
     except Exception as e:
@@ -264,6 +292,7 @@ def enrich_production_data(
 ) -> dict:
     """
     Enrich extracted production data with information from external APIs.
+    Uses parallel execution for faster processing.
 
     Args:
         extracted_data: Production data extracted from LLM
@@ -290,15 +319,6 @@ def enrich_production_data(
         'research': None
     }
 
-    # Fetch company logo and research
-    if client_name:
-        emit("research", 75, f"Researching {client_name}...")
-        logo_url = get_company_logo(client_name)
-        enriched['client_info']['logo_url'] = logo_url
-
-        research = get_client_research(client_name)
-        enriched['client_info']['research'] = research
-
     # Enrich locations with coordinates and weather
     locations = enriched.get('logistics', {}).get('locations', [])
     schedule_days = enriched.get('schedule_days', [])
@@ -308,43 +328,94 @@ def enrich_production_data(
     if schedule_days:
         first_date = schedule_days[0].get('date')
 
-    # Geocode locations
-    emit("geocoding", 50, "Geocoding locations...")
-
-    for location in locations:
+    # Collect addresses for geocoding
+    addresses_to_geocode = []
+    for i, location in enumerate(locations):
         address = location.get('address', '')
-
         if address and address.upper() != 'TBD':
-            coords = get_location_coordinates(address)
+            addresses_to_geocode.append((i, address))
 
-            if coords:
-                location['coordinates'] = {
-                    'lat': coords['lat'],
-                    'lng': coords['lng']
-                }
-                location['formatted_address'] = coords['formatted_address']
+    # PARALLEL EXECUTION: Run all independent API calls together
+    emit("geocoding", 50, "Fetching location & client data...")
 
-                # Get weather for this location on first shoot date
-                if first_date:
-                    emit("weather", 65, "Fetching weather data...")
-                    weather = get_weather_data(coords['lat'], coords['lng'], first_date)
-                    if weather:
-                        # Store weather in logistics
-                        if 'weather' not in enriched['logistics']:
-                            enriched['logistics']['weather'] = weather
-                        else:
-                            # Update with actual data if we had TBD values
-                            enriched['logistics']['weather'].update(weather)
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {}
 
-    # Enrich weather for each schedule day
-    if locations and locations[0].get('coordinates'):
-        coords = locations[0]['coordinates']
+        # Submit geocoding tasks
+        for i, address in addresses_to_geocode:
+            futures[executor.submit(get_location_coordinates, address)] = ('geocode', i)
 
+        # Submit client info tasks (if client exists)
+        if client_name:
+            futures[executor.submit(get_company_logo, client_name)] = ('logo', None)
+            futures[executor.submit(get_client_research, client_name)] = ('research', None)
+
+        # Collect geocoding results
+        coords_results = {}
+        for future in as_completed(futures):
+            task_type, task_index = futures[future]
+            try:
+                result = future.result()
+                if task_type == 'geocode' and result:
+                    coords_results[task_index] = result
+                elif task_type == 'logo':
+                    enriched['client_info']['logo_url'] = result
+                elif task_type == 'research':
+                    enriched['client_info']['research'] = result
+            except Exception as e:
+                print(f"Warning: Task {task_type} failed: {e}")
+
+    # Apply geocoding results to locations
+    for i, coords in coords_results.items():
+        locations[i]['coordinates'] = {
+            'lat': coords['lat'],
+            'lng': coords['lng']
+        }
+        locations[i]['formatted_address'] = coords['formatted_address']
+
+    # Get primary coordinates for weather
+    primary_coords = None
+    for loc in locations:
+        if loc.get('coordinates'):
+            primary_coords = loc['coordinates']
+            break
+
+    # PARALLEL WEATHER: Fetch weather for all schedule days at once
+    if primary_coords and schedule_days:
+        emit("weather", 70, "Fetching weather data...")
+
+        dates_to_fetch = [day.get('date') for day in schedule_days if day.get('date')]
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            weather_futures = {
+                executor.submit(
+                    get_weather_data,
+                    primary_coords['lat'],
+                    primary_coords['lng'],
+                    date
+                ): date for date in dates_to_fetch
+            }
+
+            weather_results = {}
+            for future in as_completed(weather_futures):
+                date = weather_futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        weather_results[date] = result
+                except Exception as e:
+                    print(f"Warning: Weather fetch for {date} failed: {e}")
+
+        # Apply weather results to schedule days
         for day in schedule_days:
             date = day.get('date')
-            if date:
-                weather = get_weather_data(coords['lat'], coords['lng'], date)
-                if weather:
-                    day['weather'] = weather
+            if date and date in weather_results:
+                day['weather'] = weather_results[date]
+
+        # Set first day's weather as logistics weather
+        if first_date and first_date in weather_results:
+            enriched['logistics']['weather'] = weather_results[first_date]
+
+    emit("research", 85, "Finalizing enrichment...")
 
     return enriched

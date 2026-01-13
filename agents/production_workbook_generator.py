@@ -688,12 +688,13 @@ def run_tool(
     emit("extracting_data", 30, "Extracting production information...")
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-1.5-flash",  # Faster than 2.0-flash
         contents=[
             {"role": "user", "parts": [{"text": EPITOME_EXTRACTION_SYSTEM_PROMPT}]},
             {"role": "model", "parts": [{"text": "I understand. I will extract production data from user requests and return structured JSON following the schema you provided. I'm ready to process requests."}]},
             {"role": "user", "parts": [{"text": user_message}]}
-        ]
+        ],
+        config={"temperature": 0}  # Deterministic output, slightly faster
     )
 
     # Extract JSON from response
