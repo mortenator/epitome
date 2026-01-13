@@ -5,7 +5,11 @@ Generates multi-tab Excel workbooks for production management using xlsxwriter.
 
 import xlsxwriter
 import json
-from datetime import datetime, timedelta
+import os
+import re
+from datetime import datetime
+from google import genai
+from .prompts import EPITOME_EXTRACTION_SYSTEM_PROMPT
 
 
 class EpitomeWorkbookGenerator:
@@ -51,7 +55,8 @@ class EpitomeWorkbookGenerator:
         })
 
     def generate(self):
-        """Orchestrates the generation of all sheets."""
+        """Orchestrates the generation of all sheets matching sample workbook structure."""
+        # Core sheets
         self._write_crew_list()
         self._write_schedule()
 
@@ -60,8 +65,17 @@ class EpitomeWorkbookGenerator:
         for day in days:
             self._write_call_sheet(day)
 
-        self._write_locations()
+        # Additional production sheets
         self._write_po_log()
+        self._write_credits_list()
+        self._write_locations()
+        self._write_key_crew()
+        self._write_overages()
+        self._write_transpo()
+        self._write_pick_up_list()
+        self._write_travel()
+        self._write_travel_memo()
+        self._write_wrap_notes()
 
         self.workbook.close()
         return self.output_filename
@@ -302,56 +316,330 @@ class EpitomeWorkbookGenerator:
             for c in range(8):
                 ws.write_blank(r, c, None, self.formats['cell_normal'])
 
+    # ==========================================
+    # SHEET 6: CREDITS LIST
+    # ==========================================
+    def _write_credits_list(self):
+        ws = self.workbook.add_worksheet('Credits List')
+        ws.set_column('A:A', 25)
+        ws.set_column('B:B', 25)
+        ws.set_column('C:C', 20)
+
+        ws.write('A1', "CREDITS LIST", self.formats['header_dark'])
+
+        headers = ['Production', 'Name', 'Instagram (@)']
+        for col, h in enumerate(headers):
+            ws.write(1, col, h, self.formats['dept_header'])
+
+        # Standard production roles for credits
+        roles = [
+            'Director', 'Executive Producer', 'Producer', 'Production Manager',
+            'Production Coordinator', '1st AD', '2nd AD', 'Director of Photography',
+            'Camera Operator', '1st AC', 'Gaffer', 'Key Grip', 'HMU', 'Wardrobe Stylist',
+            'Production Designer', 'Art Director', 'Editor', 'Colorist', 'Sound Mixer'
+        ]
+
+        row = 2
+        for role in roles:
+            ws.write(row, 0, role, self.formats['cell_bold'])
+            ws.write_blank(row, 1, None, self.formats['cell_normal'])
+            ws.write_blank(row, 2, None, self.formats['cell_normal'])
+            row += 1
+
+    # ==========================================
+    # SHEET 7: KEY CREW
+    # ==========================================
+    def _write_key_crew(self):
+        ws = self.workbook.add_worksheet('Key Crew')
+        ws.set_column('A:A', 5)
+        ws.set_column('B:B', 25)
+        ws.set_column('C:C', 20)
+        ws.set_column('D:D', 15)
+        ws.set_column('E:E', 25)
+        ws.set_column('F:I', 15)
+
+        ws.merge_range('A1:I1', "Key Crew Options", self.formats['header_dark'])
+
+        headers = ['#', 'Name', 'Website', 'Phone', 'Email', 'Rate/Fees', 'Holds', 'Agency', 'Agency Email']
+        for col, h in enumerate(headers):
+            ws.write(1, col, h, self.formats['dept_header'])
+
+        # Key crew categories
+        categories = [
+            'Director of Photography', 'Gaffer', 'Key Grip', 'Production Designer',
+            'HMU', 'Wardrobe Stylist', 'Editor', 'Colorist'
+        ]
+
+        row = 2
+        for category in categories:
+            ws.write(row, 0, category, self.formats['cell_bold'])
+            ws.merge_range(row, 1, row, 8, '', self.formats['cell_normal'])
+            row += 1
+            # Add 3 option rows per category
+            for i in range(1, 4):
+                ws.write(row, 0, f'{i}.0', self.formats['cell_center'])
+                for c in range(1, 9):
+                    ws.write_blank(row, c, None, self.formats['cell_normal'])
+                row += 1
+
+    # ==========================================
+    # SHEET 8: OVERAGES
+    # ==========================================
+    def _write_overages(self):
+        ws = self.workbook.add_worksheet('Overages')
+        ws.set_column('A:L', 15)
+
+        ws.merge_range('A1:L1', "OVERAGES TRACKER", self.formats['header_dark'])
+
+        headers = ['Department', 'Description', 'Budgeted', 'Actual', 'Overage', 'Notes']
+        for col, h in enumerate(headers):
+            ws.write(2, col, h, self.formats['dept_header'])
+
+        # Add blank rows for entry
+        for r in range(3, 20):
+            for c in range(6):
+                ws.write_blank(r, c, None, self.formats['cell_normal'])
+
+    # ==========================================
+    # SHEET 9: TRANSPO
+    # ==========================================
+    def _write_transpo(self):
+        ws = self.workbook.add_worksheet('Transpo')
+        ws.set_column('A:A', 5)
+        ws.set_column('B:B', 20)
+        ws.set_column('C:C', 20)
+        ws.set_column('D:K', 12)
+
+        ws.merge_range('A1:K1', "Transportation & Rental Grid", self.formats['header_dark'])
+
+        # Day headers row
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        ws.write(1, 5, 'Day of Week', self.formats['dept_header'])
+        for i, day in enumerate(days):
+            ws.write(1, 6 + i, day, self.formats['dept_header'])
+
+        ws.write(2, 5, 'Date', self.formats['cell_bold'])
+        ws.write(3, 5, 'Prep/Shoot/Wrap', self.formats['cell_bold'])
+
+        # Column headers
+        headers = ['#', 'Vehicle Type', 'Vendor', 'Days Used', 'Price', 'Driver']
+        for col, h in enumerate(headers):
+            ws.write(4, col, h, self.formats['dept_header'])
+
+        # Add blank rows for vehicles
+        for r in range(5, 15):
+            ws.write(r, 0, f'{r - 4}.0', self.formats['cell_center'])
+            for c in range(1, 11):
+                ws.write_blank(r, c, None, self.formats['cell_normal'])
+
+    # ==========================================
+    # SHEET 10: PICK UP LIST
+    # ==========================================
+    def _write_pick_up_list(self):
+        ws = self.workbook.add_worksheet('Pick Up List')
+        ws.set_column('A:A', 5)
+        ws.set_column('B:B', 25)
+        ws.set_column('C:C', 30)
+        ws.set_column('D:G', 15)
+
+        ws.merge_range('A1:G1', "Pick Up List", self.formats['header_dark'])
+
+        headers = ['#', 'Name', 'Address', 'Phone', 'Date', 'Time', 'What']
+        for col, h in enumerate(headers):
+            ws.write(1, col, h, self.formats['dept_header'])
+
+        ws.write(2, 0, 'Driver:', self.formats['cell_bold'])
+        ws.merge_range(2, 1, 2, 6, '', self.formats['cell_normal'])
+
+        # Add blank rows for pickups
+        for r in range(3, 15):
+            ws.write(r, 0, f'{r - 2}.0', self.formats['cell_center'])
+            for c in range(1, 7):
+                ws.write_blank(r, c, None, self.formats['cell_normal'])
+
+    # ==========================================
+    # SHEET 11: TRAVEL
+    # ==========================================
+    def _write_travel(self):
+        ws = self.workbook.add_worksheet('Travel')
+        ws.set_column('A:A', 5)
+        ws.set_column('B:B', 15)
+        ws.set_column('C:C', 20)
+        ws.set_column('D:N', 12)
+
+        # Flights section
+        ws.merge_range('A1:N1', "Flights", self.formats['header_dark'])
+
+        # Sub-headers
+        ws.merge_range('C2:E2', "Booking Info", self.formats['dept_header'])
+        ws.merge_range('F2:I2', "Outbound", self.formats['dept_header'])
+        ws.merge_range('J2:M2', "Inbound", self.formats['dept_header'])
+
+        headers = ['#', 'Role', 'Name', 'Birthday', 'Frequent Flyer #',
+                   'Date', 'Airline', 'Departure', 'Arrival',
+                   'Date', 'Airline', 'Departure', 'Arrival', 'Notes']
+        for col, h in enumerate(headers):
+            ws.write(2, col, h, self.formats['cell_bold'])
+
+        # Standard roles
+        roles = ['EP', 'Director', 'Producer', 'DP', 'Talent 1', 'Talent 2']
+        for i, role in enumerate(roles):
+            row = 3 + i
+            ws.write(row, 0, f'{i + 1}.0', self.formats['cell_center'])
+            ws.write(row, 1, role, self.formats['cell_normal'])
+            for c in range(2, 14):
+                ws.write_blank(row, c, None, self.formats['cell_normal'])
+
+        # Lodging section
+        lodging_row = 10
+        ws.merge_range(f'A{lodging_row}:N{lodging_row}', "Lodging", self.formats['header_dark'])
+
+        lodging_headers = ['#', 'Role', 'Name', 'Hotel', 'Check-In', 'Check-Out', 'Confirmation #', 'Notes']
+        for col, h in enumerate(lodging_headers):
+            ws.write(lodging_row, col, h, self.formats['cell_bold'])
+
+        for r in range(lodging_row + 1, lodging_row + 8):
+            ws.write(r, 0, f'{r - lodging_row}.0', self.formats['cell_center'])
+            for c in range(1, 8):
+                ws.write_blank(r, c, None, self.formats['cell_normal'])
+
+    # ==========================================
+    # SHEET 12: TRAVEL MEMO
+    # ==========================================
+    def _write_travel_memo(self):
+        ws = self.workbook.add_worksheet('Travel Memo')
+        ws.set_column('A:Z', 12)
+
+        prod_info = self.data.get('production_info', {})
+        client = prod_info.get('client', 'CLIENT')
+
+        ws.merge_range('A1:J1', f"{client} - WEEKLY SCHEDULE", self.formats['header_dark'])
+
+        # Section headers
+        ws.write('A3', "Shoot", self.formats['dept_header'])
+        ws.write('D3', "Hotel", self.formats['dept_header'])
+        ws.write('G3', "Location", self.formats['dept_header'])
+
+        # Add placeholder content
+        days = self.data.get('schedule_days', [])
+        row = 4
+        for day in days:
+            ws.write(row, 0, f"Day {day.get('day_number', '')}", self.formats['cell_bold'])
+            ws.write(row, 1, day.get('date', 'TBD'), self.formats['cell_normal'])
+            row += 1
+
+    # ==========================================
+    # SHEET 13: WRAP NOTES
+    # ==========================================
+    def _write_wrap_notes(self):
+        ws = self.workbook.add_worksheet('Wrap Notes')
+        ws.set_column('A:V', 15)
+
+        prod_info = self.data.get('production_info', {})
+
+        ws.merge_range('A1:V1', "WRAP REPORT", self.formats['header_dark'])
+
+        # Header info
+        ws.write('A3', "Job Name:", self.formats['cell_bold'])
+        ws.write('B3', prod_info.get('job_name', 'TBD'), self.formats['cell_normal'])
+        ws.write('C3', "Producer:", self.formats['cell_bold'])
+        ws.write('D3', '', self.formats['cell_normal'])
+        ws.write('E3', "UPM:", self.formats['cell_bold'])
+        ws.write('F3', '', self.formats['cell_normal'])
+
+        ws.write('A4', "Client:", self.formats['cell_bold'])
+        ws.write('B4', prod_info.get('client', 'TBD'), self.formats['cell_normal'])
+        ws.write('C4', "Wrap Date:", self.formats['cell_bold'])
+        ws.write('D4', '', self.formats['cell_normal'])
+
+        # Wrap notes sections
+        sections = ['Equipment Returns', 'Outstanding Payments', 'Final Deliverables', 'Notes']
+        row = 6
+        for section in sections:
+            ws.merge_range(row, 0, row, 5, section, self.formats['dept_header'])
+            row += 1
+            for _ in range(4):
+                for c in range(6):
+                    ws.write_blank(row, c, None, self.formats['cell_normal'])
+                row += 1
+            row += 1
+
 
 # ==========================================
 # TOOL ENTRY POINT
 # ==========================================
 
-def run_tool(prompt: str, attached_file_content: str = None):
+def _extract_json_from_response(text: str) -> dict:
+    """Extract JSON from LLM response, handling markdown code blocks."""
+    # Try to find JSON in markdown code block
+    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+    if json_match:
+        json_str = json_match.group(1)
+    else:
+        # Assume the entire response is JSON
+        json_str = text.strip()
+
+    return json.loads(json_str)
+
+
+def _get_api_key() -> str:
+    """Get Gemini API key from environment variables."""
+    api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    if not api_key:
+        raise ValueError(
+            "Missing API key. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable."
+        )
+    return api_key
+
+
+def run_tool(prompt: str, attached_file_content: str = None) -> str:
     """
-    Simulates the Tool execution pipeline.
-    1. In a real scenario, an Agent would use the 'EPITOME_EXTRACTION_SYSTEM_PROMPT'
-       to parse the 'prompt' and 'attached_file_content' into the 'json_data' dict below.
-    2. We then pass that JSON to the Generator.
+    Execute the Epitome production workbook generation pipeline.
+
+    1. Uses Gemini LLM with EPITOME_EXTRACTION_SYSTEM_PROMPT to parse
+       the user prompt and optional file content into structured JSON.
+    2. Passes the extracted JSON to EpitomeWorkbookGenerator.
+    3. Returns the path to the generated workbook.
+
+    Args:
+        prompt: Natural language request (e.g., "Create call sheets for a 5 day shoot for Google")
+        attached_file_content: Optional CSV/text content of crew list or schedule
+
+    Returns:
+        Success message with path to generated workbook
+
+    Raises:
+        ValueError: If API key is missing
+        Exception: If LLM call or JSON parsing fails
     """
+    # Get API key and initialize client
+    api_key = _get_api_key()
+    client = genai.Client(api_key=api_key)
 
-    # --- MOCK DATA EXTRACTION (Simulating LLM Output) ---
-    # This dictionary mimics what the LLM would return based on a prompt like:
-    # "Create a call sheet for a 3 day shoot for Nike starting Jan 20th"
+    # Build user message
+    today = datetime.now().strftime("%Y-%m-%d")
+    user_message = f"Today's date is {today}.\n\nUser request: {prompt}"
 
-    mock_llm_output = {
-        "production_info": {
-            "job_name": "Nike Campaign - Summer 26",
-            "client": "Nike",
-            "job_number": "EP-NIKE-001",
-            "production_company": "Epitome"
-        },
-        "logistics": {
-            "locations": [
-                {"name": "SoFi Stadium", "address": "1001 Stadium Dr, Inglewood, CA", "parking": "Lot C"},
-                {"name": "Venice Beach", "address": "Ocean Front Walk", "parking": "Public Lot 4"}
-            ],
-            "weather": {"high": "75F", "low": "60F", "sunrise": "6:45 AM", "sunset": "5:30 PM"},
-            "hospital": {"name": "Centinela Hospital", "address": "555 E Hardy St, Inglewood"}
-        },
-        "schedule_days": [
-            {"day_number": 1, "date": "2026-01-20", "crew_call": "07:00 AM", "talent_call": "09:00 AM"},
-            {"day_number": 2, "date": "2026-01-21", "crew_call": "06:30 AM", "talent_call": "08:00 AM"},
-            {"day_number": 3, "date": "2026-01-22", "crew_call": "08:00 AM", "talent_call": "10:00 AM"}
-        ],
-        "crew_list": [] # Empty, forcing the generator to use default template roles
-    }
-
-    # If the user uploaded a file (e.g., Crew List csv), we would parse it here
-    # and populate 'mock_llm_output["crew_list"]' with the actual data.
     if attached_file_content:
-        # Simple Logic: parsing a CSV string into the dict
-        # In production this would be handled by pandas.read_csv
-        pass
+        user_message += f"\n\nAttached file content:\n{attached_file_content}"
 
-    # --- GENERATION ---
+    # Call Gemini for extraction
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            {"role": "user", "parts": [{"text": EPITOME_EXTRACTION_SYSTEM_PROMPT}]},
+            {"role": "model", "parts": [{"text": "I understand. I will extract production data from user requests and return structured JSON following the schema you provided. I'm ready to process requests."}]},
+            {"role": "user", "parts": [{"text": user_message}]}
+        ]
+    )
+
+    # Extract JSON from response
+    response_text = response.text
+    extracted_data = _extract_json_from_response(response_text)
+
+    # Generate workbook
     output_file = "Epitome_Production_Workbook.xlsx"
-    generator = EpitomeWorkbookGenerator(data=mock_llm_output, output_filename=output_file)
+    generator = EpitomeWorkbookGenerator(data=extracted_data, output_filename=output_file)
     final_path = generator.generate()
 
     return f"Successfully generated production workbook at: {final_path}"
@@ -359,4 +647,4 @@ def run_tool(prompt: str, attached_file_content: str = None):
 
 if __name__ == "__main__":
     # Test Run
-    print(run_tool("Create call sheets for our 3 day shoot on monday"))
+    print(run_tool("Create call sheets for a 5 day shoot for Google starting next Monday"))
