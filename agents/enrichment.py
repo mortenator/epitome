@@ -13,10 +13,17 @@ from datetime import datetime
 from typing import Callable, Optional
 
 
-# API Keys (can be overridden via environment variables)
-GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyA6mVUzywV5QPinsPqLbjWWqagKuAt60q4')
-LOGO_DEV_API_KEY = os.environ.get('LOGO_DEV_API_KEY', 'sk_Fte_TcDzRCat_8TjFUZrLw')
-EXA_API_KEY = os.environ.get('EXA_API_KEY', '6e024e51-4d72-4545-88cc-5032b77b7443')
+# API Keys - MUST be set via environment variables (never hardcode in source)
+# Load from .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
+LOGO_DEV_API_KEY = os.environ.get('LOGO_DEV_API_KEY')
+EXA_API_KEY = os.environ.get('EXA_API_KEY')
 
 # In-memory caches for performance
 _geocode_cache = {}  # address -> coords dict
@@ -42,6 +49,9 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     if cache_key in _geocode_cache:
         return _geocode_cache[cache_key]
 
+    if not GOOGLE_MAPS_API_KEY:
+        return None  # API key not configured
+    
     try:
         params = urllib.parse.urlencode({
             'address': address,
@@ -216,6 +226,9 @@ def get_company_logo(company_name: str) -> Optional[str]:
 
         domain = domain_mappings.get(domain, f"{domain}.com")
 
+        if not LOGO_DEV_API_KEY:
+            return None  # API key not configured
+        
         # logo.dev URL format - use the simple format
         logo_url = f"https://img.logo.dev/{domain}?token={LOGO_DEV_API_KEY}&size=200"
 
@@ -254,6 +267,9 @@ def get_client_research(client_name: str) -> Optional[dict]:
             }
         }).encode('utf-8')
 
+        if not EXA_API_KEY:
+            return None  # API key not configured
+        
         req = urllib.request.Request(url, data=payload, method='POST')
         req.add_header('Content-Type', 'application/json')
         req.add_header('x-api-key', EXA_API_KEY)
