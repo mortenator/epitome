@@ -149,7 +149,7 @@ class EpitomeWorkbookGenerator:
         ws.write('B5', prod_info.get('job_name', 'TBD'), self.formats['cell_normal'])
 
         # Middle Block: Location
-        locs = logistics.get('locations', [{}])
+        locs = logistics.get('locations', [])
         main_loc = locs[0] if locs else {}
         ws.write('C4', "LOCATION:", self.formats['header_light'])
         ws.write('C5', main_loc.get('name', 'TBD'), self.formats['cell_normal'])
@@ -227,9 +227,9 @@ class EpitomeWorkbookGenerator:
     # ==========================================
     def _write_schedule(self):
         ws = self.workbook.add_worksheet('Schedule')
-        ws.set_column('A:A', 15) # Time
-        ws.set_column('B:B', 40) # Activity
-        ws.set_column('C:C', 30) # Notes
+        ws.set_column('A:A', 15)  # Time
+        ws.set_column('B:B', 40)  # Activity
+        ws.set_column('C:C', 30)  # Notes
 
         ws.write('A1', "SHOOT SCHEDULE", self.formats['title_large'])
 
@@ -237,21 +237,25 @@ class EpitomeWorkbookGenerator:
         for col, h in enumerate(headers):
             ws.write(3, col, h, self.formats['header_dark'])
 
-        # Mock Schedule Data
-        schedule = [
-            ("07:00 AM", "CREW CALL / BREAKFAST", "Catering Tent"),
-            ("08:00 AM", "Safety Meeting", "All Hands"),
-            ("08:15 AM", "Shoot Scene 1", "Exterior"),
-            ("01:00 PM", "LUNCH", "30 Mins"),
-            ("01:30 PM", "Shoot Scene 2", "Interior"),
-            ("07:00 PM", "WRAP", "Estimated")
-        ]
+        # Get schedule from data, or use default template
+        schedule = self.data.get('schedule', [])
+
+        if not schedule:
+            # Default schedule template when none provided
+            schedule = [
+                {"time": "07:00 AM", "activity": "CREW CALL / BREAKFAST", "notes": "Catering Tent"},
+                {"time": "08:00 AM", "activity": "Safety Meeting", "notes": "All Hands"},
+                {"time": "08:15 AM", "activity": "Shoot Scene 1", "notes": "TBD"},
+                {"time": "01:00 PM", "activity": "LUNCH", "notes": "30 Mins"},
+                {"time": "01:30 PM", "activity": "Shoot Scene 2", "notes": "TBD"},
+                {"time": "07:00 PM", "activity": "WRAP", "notes": "Estimated"}
+            ]
 
         row = 4
-        for time, activity, notes in schedule:
-            ws.write(row, 0, time, self.formats['cell_center'])
-            ws.write(row, 1, activity, self.formats['cell_normal'])
-            ws.write(row, 2, notes, self.formats['cell_normal'])
+        for item in schedule:
+            ws.write(row, 0, item.get('time', ''), self.formats['cell_center'])
+            ws.write(row, 1, item.get('activity', ''), self.formats['cell_normal'])
+            ws.write(row, 2, item.get('notes', ''), self.formats['cell_normal'])
             row += 1
 
     # ==========================================
@@ -266,6 +270,9 @@ class EpitomeWorkbookGenerator:
             ws.write(0, col, h, self.formats['header_dark'])
 
         locs = self.data.get('logistics', {}).get('locations', [])
+        hosp = self.data.get('logistics', {}).get('hospital', {})
+        hosp_info = f"{hosp.get('name', 'TBD')} - {hosp.get('address', '')}" if hosp else "TBD"
+
         row = 1
         for loc in locs:
             ws.write(row, 0, loc.get('name', ''), self.formats['cell_bold'])
@@ -273,6 +280,7 @@ class EpitomeWorkbookGenerator:
             ws.write(row, 2, loc.get('contact', ''), self.formats['cell_normal'])
             ws.write(row, 3, loc.get('phone', ''), self.formats['cell_normal'])
             ws.write(row, 4, loc.get('parking', ''), self.formats['cell_normal'])
+            ws.write(row, 5, hosp_info, self.formats['cell_normal'])
             row += 1
 
     # ==========================================
