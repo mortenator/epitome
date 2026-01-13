@@ -1,0 +1,10 @@
+# Epitome Production Workbook Generator Dependencies
+
+# Excel generation
+xlsxwriter>=3.1.9
+
+# Optional: For enhanced CSV/data processing
+pandas>=2.0.0
+
+# Optional: For date handling
+python-dateutil>=2.8.2
