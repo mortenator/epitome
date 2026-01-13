@@ -7,6 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+# Load environment variables from .env file BEFORE importing agents
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, continue without it
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
@@ -175,8 +182,8 @@ async def stream_progress(job_id: str):
                     event = await asyncio.wait_for(queue.get(), timeout=120.0)
                     yield event.to_sse()
 
-                    # Check if complete, error, or download ready
-                    if event.stage_id in ("complete", "error", "download_ready"):
+                    # Check if error or download ready (don't break on 'complete' - wait for download_ready)
+                    if event.stage_id in ("error", "download_ready"):
                         break
 
                 except asyncio.TimeoutError:
