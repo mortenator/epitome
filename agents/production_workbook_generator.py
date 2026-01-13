@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from google import genai
 from .prompts import EPITOME_EXTRACTION_SYSTEM_PROMPT
+from .enrichment import enrich_production_data
 
 
 class EpitomeWorkbookGenerator:
@@ -172,9 +173,32 @@ class EpitomeWorkbookGenerator:
         # Right Block: Times & Weather
         ws.write('E4', "CREW CALL:", self.formats['header_light'])
         ws.write('F4', day_info.get('crew_call', 'TBD'), self.formats['cell_bold'])
+
+        # Get weather from day_info (enriched) or fallback to logistics
+        day_weather = day_info.get('weather', {})
+        weather = day_weather if day_weather else logistics.get('weather', {})
+
+        # Temperature
         ws.write('E5', "WEATHER:", self.formats['header_light'])
-        weather = logistics.get('weather', {})
-        ws.write('F5', f"H: {weather.get('high','-')} L: {weather.get('low','-')}", self.formats['cell_normal'])
+        temp = weather.get('temperature', {})
+        if isinstance(temp, dict):
+            temp_str = f"H: {temp.get('high', '-')} L: {temp.get('low', '-')}"
+        else:
+            temp_str = f"H: {weather.get('high', '-')} L: {weather.get('low', '-')}"
+        conditions = weather.get('conditions', '')
+        if conditions:
+            temp_str += f" - {conditions}"
+        ws.write('F5', temp_str, self.formats['cell_normal'])
+
+        # Sunrise/Sunset
+        ws.write('E6', "SUNRISE/SUNSET:", self.formats['header_light'])
+        sunrise = weather.get('sunrise', 'TBD')
+        sunset = weather.get('sunset', 'TBD')
+        ws.write('F6', f"{sunrise} / {sunset}", self.formats['cell_normal'])
+
+        # Wind
+        ws.write('E7', "WIND:", self.formats['header_light'])
+        ws.write('F7', weather.get('wind', 'TBD'), self.formats['cell_normal'])
 
         ws.write('A8', "NEAREST HOSPITAL:", self.formats['header_light'])
         hosp = logistics.get('hospital', {})
@@ -277,9 +301,15 @@ class EpitomeWorkbookGenerator:
     # ==========================================
     def _write_locations(self):
         ws = self.workbook.add_worksheet('Locations')
-        ws.set_column('A:F', 20)
+        ws.set_column('A:A', 20)
+        ws.set_column('B:B', 30)
+        ws.set_column('C:C', 20)
+        ws.set_column('D:D', 15)
+        ws.set_column('E:E', 15)
+        ws.set_column('F:F', 25)
+        ws.set_column('G:G', 25)
 
-        headers = ['Location Name', 'Address', 'Contact Name', 'Phone', 'Parking Notes', 'Nearest Hospital']
+        headers = ['Location Name', 'Address', 'GPS Coordinates', 'Contact', 'Phone', 'Parking Notes', 'Nearest Hospital']
         for col, h in enumerate(headers):
             ws.write(0, col, h, self.formats['header_dark'])
 
@@ -290,11 +320,20 @@ class EpitomeWorkbookGenerator:
         row = 1
         for loc in locs:
             ws.write(row, 0, loc.get('name', ''), self.formats['cell_bold'])
-            ws.write(row, 1, loc.get('address', ''), self.formats['cell_normal'])
-            ws.write(row, 2, loc.get('contact', ''), self.formats['cell_normal'])
-            ws.write(row, 3, loc.get('phone', ''), self.formats['cell_normal'])
-            ws.write(row, 4, loc.get('parking', ''), self.formats['cell_normal'])
-            ws.write(row, 5, hosp_info, self.formats['cell_normal'])
+            ws.write(row, 1, loc.get('formatted_address', loc.get('address', '')), self.formats['cell_normal'])
+
+            # GPS Coordinates from enrichment
+            coords = loc.get('coordinates', {})
+            if coords:
+                coord_str = f"{coords.get('lat', '')}, {coords.get('lng', '')}"
+            else:
+                coord_str = 'TBD'
+            ws.write(row, 2, coord_str, self.formats['cell_normal'])
+
+            ws.write(row, 3, loc.get('contact', ''), self.formats['cell_normal'])
+            ws.write(row, 4, loc.get('phone', ''), self.formats['cell_normal'])
+            ws.write(row, 5, loc.get('parking', ''), self.formats['cell_normal'])
+            ws.write(row, 6, hosp_info, self.formats['cell_normal'])
             row += 1
 
     # ==========================================
@@ -592,21 +631,23 @@ def _get_api_key() -> str:
     return api_key
 
 
-def run_tool(prompt: str, attached_file_content: str = None) -> str:
+def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True) -> dict:
     """
     Execute the Epitome production workbook generation pipeline.
 
     1. Uses Gemini LLM with EPITOME_EXTRACTION_SYSTEM_PROMPT to parse
        the user prompt and optional file content into structured JSON.
-    2. Passes the extracted JSON to EpitomeWorkbookGenerator.
-    3. Returns the path to the generated workbook.
+    2. Enriches data with external APIs (location, weather, company info).
+    3. Passes the enriched JSON to EpitomeWorkbookGenerator.
+    4. Returns the enriched data and workbook path.
 
     Args:
         prompt: Natural language request (e.g., "Create call sheets for a 5 day shoot for Google")
         attached_file_content: Optional CSV/text content of crew list or schedule
+        enrich: Whether to enrich data with external APIs (default: True)
 
     Returns:
-        Success message with path to generated workbook
+        Dict with 'workbook_path' and 'data' (enriched production data for dashboard)
 
     Raises:
         ValueError: If API key is missing
@@ -624,6 +665,7 @@ def run_tool(prompt: str, attached_file_content: str = None) -> str:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"
 
     # Call Gemini for extraction
+    print("Extracting production data from prompt...")
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=[
@@ -637,14 +679,31 @@ def run_tool(prompt: str, attached_file_content: str = None) -> str:
     response_text = response.text
     extracted_data = _extract_json_from_response(response_text)
 
+    # Enrich data with external APIs
+    if enrich:
+        print("\nEnriching data with external APIs...")
+        enriched_data = enrich_production_data(extracted_data)
+    else:
+        enriched_data = extracted_data
+
     # Generate workbook
+    print("\nGenerating workbook...")
     output_file = "Epitome_Production_Workbook.xlsx"
-    generator = EpitomeWorkbookGenerator(data=extracted_data, output_filename=output_file)
+    generator = EpitomeWorkbookGenerator(data=enriched_data, output_filename=output_file)
     final_path = generator.generate()
 
-    return f"Successfully generated production workbook at: {final_path}"
+    print(f"\nSuccessfully generated production workbook at: {final_path}")
+
+    return {
+        'workbook_path': final_path,
+        'data': enriched_data
+    }
 
 
 if __name__ == "__main__":
     # Test Run
-    print(run_tool("Create call sheets for a 5 day shoot for Google starting next Monday"))
+    result = run_tool("Create call sheets for a 5 day shoot for Google starting next Monday")
+    print(f"\nWorkbook: {result['workbook_path']}")
+    print(f"\nEnriched Data Keys: {list(result['data'].keys())}")
+    if result['data'].get('client_info'):
+        print(f"Client Logo: {result['data']['client_info'].get('logo_url')}")
