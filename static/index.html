@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epitome - Production Workbook Generator</title>
+    <style>
+        :root {
+            --dark-charcoal: #111827;
+            --light-grey: #D1D5DB;
+            --bg-grey: #F3F4F6;
+            --accent-blue: #3B82F6;
+            --success-green: #10B981;
+            --error-red: #EF4444;
+            --white: #FFFFFF;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-grey);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            color: var(--dark-charcoal);
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.1em;
+        }
+
+        header p {
+            color: #6B7280;
+            font-size: 1rem;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Dropzone */
+        .dropzone {
+            border: 2px dashed var(--light-grey);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: var(--accent-blue);
+            background: #EFF6FF;
+        }
+
+        .dropzone.has-file {
+            border-color: var(--success-green);
+            background: #ECFDF5;
+        }
+
+        .dropzone-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .dropzone-text {
+            color: #6B7280;
+        }
+
+        .dropzone-text strong {
+            color: var(--dark-charcoal);
+        }
+
+        .dropzone-formats {
+            font-size: 0.8rem;
+            color: #9CA3AF;
+            margin-top: 0.5rem;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: var(--bg-grey);
+            border-radius: 6px;
+            margin-top: -0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .file-info .file-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--dark-charcoal);
+            font-size: 0.9rem;
+        }
+
+        .file-info .remove-file {
+            cursor: pointer;
+            color: var(--error-red);
+            font-size: 0.85rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .file-info .remove-file:hover {
+            background: #FEE2E2;
+        }
+
+        /* Prompt Input */
+        .prompt-section label {
+            display: block;
+            font-weight: 600;
+            color: var(--dark-charcoal);
+            margin-bottom: 0.5rem;
+        }
+
+        .prompt-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 1rem;
+            border: 1px solid var(--light-grey);
+            border-radius: 8px;
+            font-size: 1rem;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+
+        .prompt-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .prompt-examples {
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            color: #6B7280;
+        }
+
+        .prompt-examples code {
+            background: var(--bg-grey);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+
+        /* Submit Button */
+        .submit-btn {
+            width: 100%;
+            padding: 1rem 2rem;
+            background: var(--dark-charcoal);
+            color: var(--white);
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1.5rem;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background: #1F2937;
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:disabled {
+            background: #9CA3AF;
+            cursor: not-allowed;
+        }
+
+        /* Progress Section */
+        .progress-section {
+            display: none;
+        }
+
+        .progress-section.active {
+            display: block;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .progress-header h3 {
+            color: var(--dark-charcoal);
+            font-size: 1.1rem;
+        }
+
+        .progress-percent {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .progress-bar-container {
+            height: 6px;
+            background: var(--bg-grey);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-blue);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .progress-bar.complete {
+            background: var(--success-green);
+        }
+
+        .progress-bar.error {
+            background: var(--error-red);
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            list-style: none;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 0;
+            color: #9CA3AF;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--bg-grey);
+        }
+
+        .progress-step:last-child {
+            border-bottom: none;
+        }
+
+        .progress-step.active {
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        .progress-step.complete {
+            color: var(--success-green);
+        }
+
+        .progress-step.error {
+            color: var(--error-red);
+        }
+
+        .step-icon {
+            width: 22px;
+            height: 22px;
+            margin-right: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--light-grey);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Download Section */
+        .download-section {
+            display: none;
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .download-section.active {
+            display: block;
+        }
+
+        .success-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .download-section h3 {
+            margin-bottom: 1rem;
+            color: var(--dark-charcoal);
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            background: var(--success-green);
+            color: var(--white);
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .reset-btn {
+            display: block;
+            margin: 1rem auto 0;
+            color: #6B7280;
+            text-decoration: underline;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .reset-btn:hover {
+            color: var(--dark-charcoal);
+        }
+
+        /* Error Message */
+        .error-message {
+            background: #FEF2F2;
+            border: 1px solid #FCA5A5;
+            color: var(--error-red);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+            font-size: 0.9rem;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .hidden-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>EPITOME</h1>
+            <p>Production Workbook Generator</p>
+        </header>
+
+        <!-- Input Form Card -->
+        <div class="card" id="input-card">
+            <!-- File Dropzone -->
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-text">
+                    <strong>Drop your file here</strong> or click to browse
+                </div>
+                <div class="dropzone-formats">
+                    Supports: CSV, PDF, TXT (crew lists, schedules, budgets)
+                </div>
+            </div>
+            <input type="file" id="file-input" class="hidden-input" accept=".csv,.pdf,.txt">
+
+            <div class="file-info" id="file-info" style="display: none;">
+                <span class="file-name">
+                    <span>📎</span>
+                    <span id="file-name"></span>
+                </span>
+                <span class="remove-file" onclick="removeFile()">✕ Remove</span>
+            </div>
+
+            <!-- Prompt Input -->
+            <div class="prompt-section">
+                <label for="prompt">Describe your production</label>
+                <textarea
+                    id="prompt"
+                    class="prompt-input"
+                    placeholder="e.g., Create call sheets for a 3-day shoot for Nike starting next Monday in Los Angeles"
+                ></textarea>
+                <div class="prompt-examples">
+                    Examples:
+                    <code>5 day shoot for Google in NYC</code>,
+                    <code>2 day commercial for Adidas at SoFi Stadium</code>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button class="submit-btn" id="submit-btn" onclick="submitForm()">
+                Generate Workbook
+            </button>
+
+            <!-- Error Message -->
+            <div class="error-message" id="error-message"></div>
+        </div>
+
+        <!-- Progress Card -->
+        <div class="card progress-section" id="progress-card">
+            <div class="progress-header">
+                <h3>Generating Workbook...</h3>
+                <span class="progress-percent" id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <ul class="progress-steps">
+                <li class="progress-step" data-stage="analyzing_file">
+                    <span class="step-icon">○</span>
+                    Analyzing file...
+                </li>
+                <li class="progress-step" data-stage="understanding_prompt">
+                    <span class="step-icon">○</span>
+                    Understanding prompt...
+                </li>
+                <li class="progress-step" data-stage="extracting_data">
+                    <span class="step-icon">○</span>
+                    Extracting production information...
+                </li>
+                <li class="progress-step" data-stage="geocoding">
+                    <span class="step-icon">○</span>
+                    Geocoding locations...
+                </li>
+                <li class="progress-step" data-stage="weather">
+                    <span class="step-icon">○</span>
+                    Fetching weather data...
+                </li>
+                <li class="progress-step" data-stage="research">
+                    <span class="step-icon">○</span>
+                    Researching client...
+                </li>
+                <li class="progress-step" data-stage="generating">
+                    <span class="step-icon">○</span>
+                    Generating workbook...
+                </li>
+                <li class="progress-step" data-stage="complete">
+                    <span class="step-icon">○</span>
+                    Complete!
+                </li>
+            </ul>
+        </div>
+
+        <!-- Download Card -->
+        <div class="card download-section" id="download-card">
+            <div class="success-icon">✅</div>
+            <h3>Workbook Ready!</h3>
+            <a class="download-btn" id="download-btn" href="#" download>
+                📥 Download Excel Workbook
+            </a>
+            <button class="reset-btn" onclick="resetForm()">
+                Generate Another Workbook
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let selectedFile = null;
+        let currentJobId = null;
+        let eventSource = null;
+
+        // DOM Elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const fileInfo = document.getElementById('file-info');
+        const fileName = document.getElementById('file-name');
+        const promptInput = document.getElementById('prompt');
+        const submitBtn = document.getElementById('submit-btn');
+        const inputCard = document.getElementById('input-card');
+        const progressCard = document.getElementById('progress-card');
+        const downloadCard = document.getElementById('download-card');
+        const progressBar = document.getElementById('progress-bar');
+        const progressPercent = document.getElementById('progress-percent');
+        const downloadBtn = document.getElementById('download-btn');
+        const errorMessage = document.getElementById('error-message');
+
+        // API Base URL
+        const API_BASE = window.location.origin;
+
+        // =====================
+        // File Dropzone Logic
+        // =====================
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            const validTypes = ['.csv', '.pdf', '.txt'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (!validTypes.includes(fileExt)) {
+                showError('Please upload a CSV, PDF, or TXT file.');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileInfo.style.display = 'flex';
+            dropzone.style.display = 'none';
+            hideError();
+        }
+
+        function removeFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            dropzone.style.display = 'block';
+            dropzone.classList.remove('has-file');
+        }
+
+        // =====================
+        // Form Submission
+        // =====================
+        async function submitForm() {
+            const prompt = promptInput.value.trim();
+
+            if (!prompt) {
+                showError('Please enter a production description.');
+                return;
+            }
+
+            hideError();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Starting...';
+
+            try {
+                const formData = new FormData();
+                formData.append('prompt', prompt);
+
+                if (selectedFile) {
+                    formData.append('file', selectedFile);
+                }
+
+                const response = await fetch(`${API_BASE}/api/generate`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to start generation');
+                }
+
+                const data = await response.json();
+                currentJobId = data.job_id;
+
+                // Switch to progress view
+                inputCard.style.display = 'none';
+                progressCard.classList.add('active');
+
+                // Start SSE connection
+                connectToProgress(currentJobId);
+
+            } catch (error) {
+                showError(error.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Workbook';
+            }
+        }
+
+        // =====================
+        // SSE Progress Tracking
+        // =====================
+        function connectToProgress(jobId) {
+            resetProgressUI();
+
+            eventSource = new EventSource(`${API_BASE}/api/progress/${jobId}`);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                // Check for download ready
+                if (data.stage_id === 'download_ready') {
+                    try {
+                        const info = JSON.parse(data.message);
+                        showDownload(info.filename);
+                    } catch {
+                        showDownload(data.message);
+                    }
+                    eventSource.close();
+                    return;
+                }
+
+                // Check for error
+                if (data.stage_id === 'error') {
+                    showError(data.message);
+                    progressBar.classList.add('error');
+                    eventSource.close();
+                    return;
+                }
+
+                updateProgress(data);
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE Error:', error);
+                eventSource.close();
+                // Don't show error immediately - might be normal close
+            };
+        }
+
+        function updateProgress(data) {
+            const { stage_id, percent, message } = data;
+
+            // Update progress bar
+            progressBar.style.width = `${Math.max(0, percent)}%`;
+            progressPercent.textContent = `${Math.max(0, percent)}%`;
+
+            // Update step indicators
+            const steps = document.querySelectorAll('.progress-step');
+            let foundCurrent = false;
+
+            steps.forEach(step => {
+                const stepStage = step.dataset.stage;
+                const icon = step.querySelector('.step-icon');
+
+                if (stepStage === stage_id) {
+                    step.classList.add('active');
+                    step.classList.remove('complete');
+                    icon.innerHTML = '<div class="spinner"></div>';
+                    foundCurrent = true;
+
+                    if (stage_id === 'complete') {
+                        step.classList.remove('active');
+                        step.classList.add('complete');
+                        icon.innerHTML = '✓';
+                        progressBar.classList.add('complete');
+                    }
+                } else if (!foundCurrent) {
+                    step.classList.remove('active');
+                    step.classList.add('complete');
+                    icon.innerHTML = '✓';
+                } else {
+                    step.classList.remove('active', 'complete');
+                    icon.innerHTML = '○';
+                }
+            });
+        }
+
+        function resetProgressUI() {
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('complete', 'error');
+            progressPercent.textContent = '0%';
+
+            document.querySelectorAll('.progress-step').forEach(step => {
+                step.classList.remove('active', 'complete', 'error');
+                step.querySelector('.step-icon').innerHTML = '○';
+            });
+        }
+
+        // =====================
+        // Download
+        // =====================
+        function showDownload(filename) {
+            progressCard.classList.remove('active');
+            downloadCard.classList.add('active');
+            downloadBtn.href = `${API_BASE}/api/download/${filename}`;
+        }
+
+        // =====================
+        // Reset / Error Handling
+        // =====================
+        function resetForm() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            currentJobId = null;
+
+            inputCard.style.display = 'block';
+            progressCard.classList.remove('active');
+            downloadCard.classList.remove('active');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Generate Workbook';
+            promptInput.value = '';
+            removeFile();
+            hideError();
+            resetProgressUI();
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('active');
+        }
+    </script>
+</body>
+</html>

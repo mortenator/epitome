@@ -8,6 +8,7 @@ import json
 import os
 import re
 from datetime import datetime
+from typing import Callable, Optional
 from google import genai
 from .prompts import EPITOME_EXTRACTION_SYSTEM_PROMPT
 from .enrichment import enrich_production_data
@@ -631,7 +632,12 @@ def _get_api_key() -> str:
     return api_key
 
 
-def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True) -> dict:
+def run_tool(
+    prompt: str,
+    attached_file_content: str = None,
+    enrich: bool = True,
+    progress_callback: Optional[Callable[[str, int, str], None]] = None
+) -> dict:
     """
     Execute the Epitome production workbook generation pipeline.
 
@@ -645,6 +651,7 @@ def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True
         prompt: Natural language request (e.g., "Create call sheets for a 5 day shoot for Google")
         attached_file_content: Optional CSV/text content of crew list or schedule
         enrich: Whether to enrich data with external APIs (default: True)
+        progress_callback: Optional callback for progress updates (stage_id, percent, message)
 
     Returns:
         Dict with 'workbook_path' and 'data' (enriched production data for dashboard)
@@ -653,6 +660,19 @@ def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True
         ValueError: If API key is missing
         Exception: If LLM call or JSON parsing fails
     """
+    def emit(stage_id: str, percent: int, message: str):
+        """Emit progress update."""
+        if progress_callback:
+            progress_callback(stage_id, percent, message)
+        print(message)
+
+    # Stage 1: Analyzing file (if provided)
+    if attached_file_content:
+        emit("analyzing_file", 5, "Analyzing file...")
+
+    # Stage 2: Understanding prompt
+    emit("understanding_prompt", 15, "Understanding prompt...")
+
     # Get API key and initialize client
     api_key = _get_api_key()
     client = genai.Client(api_key=api_key)
@@ -664,8 +684,9 @@ def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True
     if attached_file_content:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"
 
-    # Call Gemini for extraction
-    print("Extracting production data from prompt...")
+    # Stage 3: Extracting data
+    emit("extracting_data", 30, "Extracting production information...")
+
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=[
@@ -679,20 +700,21 @@ def run_tool(prompt: str, attached_file_content: str = None, enrich: bool = True
     response_text = response.text
     extracted_data = _extract_json_from_response(response_text)
 
-    # Enrich data with external APIs
+    # Stage 4-6: Enrich data with external APIs (sub-progress in enrichment.py)
     if enrich:
-        print("\nEnriching data with external APIs...")
-        enriched_data = enrich_production_data(extracted_data)
+        enriched_data = enrich_production_data(extracted_data, progress_callback=progress_callback)
     else:
         enriched_data = extracted_data
 
-    # Generate workbook
-    print("\nGenerating workbook...")
+    # Stage 7: Generate workbook
+    emit("generating", 90, "Generating workbook...")
+
     output_file = "Epitome_Production_Workbook.xlsx"
     generator = EpitomeWorkbookGenerator(data=enriched_data, output_filename=output_file)
     final_path = generator.generate()
 
-    print(f"\nSuccessfully generated production workbook at: {final_path}")
+    # Stage 8: Complete
+    emit("complete", 100, "Complete!")
 
     return {
         'workbook_path': final_path,

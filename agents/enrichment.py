@@ -9,7 +9,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 
 # API Keys (can be overridden via environment variables)
@@ -258,16 +258,26 @@ def get_client_research(client_name: str) -> Optional[dict]:
     return None
 
 
-def enrich_production_data(extracted_data: dict) -> dict:
+def enrich_production_data(
+    extracted_data: dict,
+    progress_callback: Optional[Callable[[str, int, str], None]] = None
+) -> dict:
     """
     Enrich extracted production data with information from external APIs.
 
     Args:
         extracted_data: Production data extracted from LLM
+        progress_callback: Optional callback for progress updates (stage_id, percent, message)
 
     Returns:
         Enriched data with coordinates, weather, logos, and research
     """
+    def emit(stage_id: str, percent: int, message: str):
+        """Emit progress update."""
+        if progress_callback:
+            progress_callback(stage_id, percent, message)
+        print(message)
+
     enriched = extracted_data.copy()
 
     # Get client info
@@ -280,14 +290,12 @@ def enrich_production_data(extracted_data: dict) -> dict:
         'research': None
     }
 
-    # Fetch company logo
+    # Fetch company logo and research
     if client_name:
-        print(f"Fetching logo for {client_name}...")
+        emit("research", 75, f"Researching {client_name}...")
         logo_url = get_company_logo(client_name)
         enriched['client_info']['logo_url'] = logo_url
 
-        # Fetch client research
-        print(f"Researching {client_name}...")
         research = get_client_research(client_name)
         enriched['client_info']['research'] = research
 
@@ -300,11 +308,13 @@ def enrich_production_data(extracted_data: dict) -> dict:
     if schedule_days:
         first_date = schedule_days[0].get('date')
 
+    # Geocode locations
+    emit("geocoding", 50, "Geocoding locations...")
+
     for location in locations:
         address = location.get('address', '')
 
         if address and address.upper() != 'TBD':
-            print(f"Geocoding: {address}...")
             coords = get_location_coordinates(address)
 
             if coords:
@@ -316,7 +326,7 @@ def enrich_production_data(extracted_data: dict) -> dict:
 
                 # Get weather for this location on first shoot date
                 if first_date:
-                    print(f"Fetching weather for {first_date}...")
+                    emit("weather", 65, "Fetching weather data...")
                     weather = get_weather_data(coords['lat'], coords['lng'], first_date)
                     if weather:
                         # Store weather in logistics
