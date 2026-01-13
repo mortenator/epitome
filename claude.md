@@ -3,6 +3,7 @@
 This document outlines best-in-class practices for working with Claude on code projects.
 
 ## Table of Contents
+- [Project Context: Epitome](#project-context-epitome)
 - [Prompt Engineering](#prompt-engineering)
 - [Code Generation Guidelines](#code-generation-guidelines)
 - [Code Review Practices](#code-review-practices)
@@ -11,6 +12,139 @@ This document outlines best-in-class practices for working with Claude on code p
 - [Error Handling](#error-handling)
 - [Testing Strategies](#testing-strategies)
 - [Documentation Standards](#documentation-standards)
+
+## Project Context: Epitome
+
+### Overview
+**Epitome** is a vertical SaaS platform designed to automate physical production workflows (film, TV, advertising).
+
+**Current Phase**: Phase 1 ("The Utility") — Automating the creation of the Call Sheet.
+
+**Core Problem**: Producers spend ~3.5 hours/day manually formatting Excel files and PDFs.
+
+**Solution**: An "Automated Executive Producer" that ingests natural language prompts (e.g., "3 day shoot for Nike") and raw files (Crew Lists) to instantly generate a production-ready Excel workbook.
+
+### System Architecture
+
+The system follows a linear **Extraction → Transformation → Generation** pipeline:
+
+```
+User Input (Prompt + CSV) 
+  → Extraction Agent (LLM Parsing)
+  → Structured JSON
+  → Generator Engine (xlsxwriter)
+  → Final Workbook.xlsx
+```
+
+#### A. The Input Layer
+- **Natural Language Prompt**: e.g., "Create a call sheet for a 3-day shoot in LA starting next Monday."
+- **File Attachment (Optional)**: A raw Crew List (CSV/Excel) or Schedule.
+
+#### B. The Extraction Agent (`prompts.py`)
+- **Role**: An LLM (Claude/GPT) acts as a "Line Producer."
+- **Responsibility**: Normalizes messy inputs into a strict JSON schema.
+- **Key Logic**:
+  - Calculates relative dates (e.g., "Next Monday").
+  - Infers Crew Roles if not explicitly stated.
+  - Sets defaults (TBD) for missing critical info.
+
+#### C. The Generator Engine (`production_workbook_generator.py`)
+- **Role**: A robust Python script using `xlsxwriter`.
+- **Capabilities**:
+  - **Dynamic Tab Generation**: Creates 1, 3, or 10 "Call Sheet" tabs based on the `schedule_days` array.
+  - **Fallback Templates**: If no crew is provided, pre-populates with standard "Skeleton Crew" roles (Director, DP, Gaffer) so users never receive a blank page.
+  - **Styling**: Applies strict "Epitome" branding (Dark Mode headers, specific grid layouts) to match Sample Production files.
+
+### Workbook Structure (Output)
+
+The generated `Epitome_Production_Workbook.xlsx` contains the following sheets, mirroring the uploaded "SAMPLE PRODUCTION WELL" templates:
+
+| Sheet Name | Function | Key Data Points |
+|------------|----------|-----------------|
+| **Crew List** | Master Contact Database | Role, Name, Phone, Email, Rate, Notes. Grouped by Department. |
+| **Call Sheet - Day [X]** | Daily Logistics (Dynamic) | Grid Layout: Production Info, Locations (Shoot/Parking), Weather, Hospital, Crew Call Times, Scene List. |
+| **Schedule** | Timeline of Events | Time, Activity/Scene, Notes. |
+| **Locations** | Logistics Detail | Name, Address, Contact, Parking Notes, Nearest Hospital. |
+| **PO Log** | Financial Tracking | Vendor, Description, Amount, PO#, Budget Code. |
+
+### Data Dictionary & JSON Schema
+
+The Generator expects a JSON object with the following structure:
+
+```json
+{
+  "production_info": {
+    "job_name": "String",
+    "client": "String",
+    "job_number": "String"
+  },
+  "logistics": {
+    "locations": [
+      {
+        "name": "String",
+        "address": "String",
+        "parking": "String"
+      }
+    ],
+    "hospital": {
+      "name": "String",
+      "address": "String"
+    },
+    "weather": {
+      "high": "String",
+      "low": "String",
+      "sunrise": "String",
+      "sunset": "String"
+    }
+  },
+  "schedule_days": [
+    {
+      "day_number": 1,
+      "date": "YYYY-MM-DD",
+      "crew_call": "07:00 AM",
+      "talent_call": "09:00 AM"
+    }
+  ],
+  "crew_list": [
+    {
+      "department": "Camera",
+      "role": "Director of Photography",
+      "name": "String",
+      "email": "String",
+      "rate": "String"
+    }
+  ]
+}
+```
+
+### Key Features Implemented
+
+1. **"TBD" Safety Net**: The system handles incomplete data gracefully. Missing locations or times default to "TBD" rather than breaking the script.
+
+2. **Role Normalization**: The system groups crew by department (Production, Camera, G&E, Art, Vanities) to match industry-standard call sheet layouts.
+
+3. **Branded Formatting**:
+   - **Header Dark**: `#111827` (Dark Charcoal) with White Text.
+   - **Dept Header**: `#D1D5DB` (Light Grey).
+   - **Pills/Highlights**: Used for Call Times.
+
+### Development Status & Roadmap
+
+**Current**: `production_workbook_generator.py` is fully functional with mock data.
+
+**Next Steps**:
+- Connect the `prompts.py` system prompt to a live LLM endpoint.
+- Implement parsing logic for uploaded CSV files to populate `crew_list` dynamically.
+- Add "Distribution" layer (Email/SMS logic defined in PRD).
+
+### Working with Claude on Epitome
+
+When asking Claude to work on Epitome code, provide context about:
+- The extraction → transformation → generation pipeline
+- The expected JSON schema structure
+- The xlsxwriter library and workbook formatting requirements
+- The "TBD" fallback pattern for missing data
+- The Epitome branding guidelines (colors, layout, styling)
 
 ## Prompt Engineering
 
