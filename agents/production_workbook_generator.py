@@ -772,6 +772,85 @@ class EpitomeWorkbookGenerator:
             'border_color': '#000000'
         })
 
+        # ============================================
+        # FOOTER SECTION FORMATS (Rows 44-50)
+        # "PRODUCTION REPORT NOTES" header and thick bottom border
+        # ============================================
+
+        # "PRODUCTION REPORT NOTES" header (spans full width)
+        self.formats['cs_notes_header_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#D9D9D9',
+            'left': 2, 'top': 2, 'bottom': 1, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_notes_header_center'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#D9D9D9',
+            'left': 0, 'top': 2, 'bottom': 1, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_notes_header_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#D9D9D9',
+            'left': 0, 'top': 2, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Notes area rows (45-49) - just side borders
+        self.formats['cs_notes_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_notes_center'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_notes_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 0, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Row 50 - Footer row with thick BOTTOM border
+        self.formats['cs_footer_bottomleft'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 2, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_footer_bottom'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 2, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_footer_bottomright'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Additional footer formats with divider (column F thick right)
+        self.formats['cs_footer_bottom_divider'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
     def generate(self):
         """Orchestrates the generation of all sheets matching sample workbook structure."""
         # Core sheets
@@ -1117,8 +1196,16 @@ class EpitomeWorkbookGenerator:
         return {}
 
     def _write_call_sheet_crew_grid(self, ws, day_info, start_row: int):
-        """Write the dual-column crew grid section with thick perimeter borders."""
-        row = start_row
+        """Write dynamic crew grid - compact when data provided, full template when empty.
+
+        Behavior:
+        - WITH crew data: Compact list, NO empty rows, footer moves up dynamically
+        - WITHOUT crew data: Full template matching sample file structure
+        """
+        HEADER_ROW = 14        # Row 15 (0-indexed)
+        DATA_START_ROW = 15    # Row 16 (0-indexed)
+
+        row = HEADER_ROW
 
         # --- CREW DATA PREPARATION ---
         crew = self.data.get('crew_list', [])
@@ -1126,7 +1213,7 @@ class EpitomeWorkbookGenerator:
         talent_call = day_info.get('talent_call', 'TBD')
 
         # Separate crew into left (production/camera/grip) and right (talent/vanity)
-        right_departments = ['Talent', 'Vanity', 'H/MU', 'Wardrobe', 'Hair', 'Makeup', 'Management', 'MGMT']
+        right_departments = ['Talent', 'Vanity', 'H/MU', 'Wardrobe', 'Hair', 'Makeup', 'Management', 'MGMT', 'Production Support']
 
         left_crew = []
         right_crew = []
@@ -1138,36 +1225,18 @@ class EpitomeWorkbookGenerator:
             else:
                 left_crew.append(person)
 
-        # If no crew data, use default skeleton
+        # If no crew data, use default template (matches sample file)
         if not crew:
             left_crew = self._get_default_left_crew()
             right_crew = self._get_default_right_crew()
 
-        # Pre-calculate total rows needed for thick border placement
-        # Count unique departments + crew members for each side
-        left_depts = set()
-        left_total_rows = 0
-        for person in left_crew:
-            dept = person.get('department', 'Production')
-            if dept not in left_depts:
-                left_depts.add(dept)
-                left_total_rows += 1  # dept header
-            left_total_rows += 1  # crew row
+        # --- PRE-CALCULATE grid end row for thick bottom border ---
+        # Count rows needed for each side (dept headers + crew members)
+        left_total_rows = self._count_crew_rows(left_crew)
+        right_total_rows = self._count_crew_rows(right_crew)
+        grid_end_row = DATA_START_ROW + max(left_total_rows, right_total_rows) - 1
 
-        right_depts = set()
-        right_total_rows = 0
-        for person in right_crew:
-            dept = person.get('department', 'Talent')
-            if dept not in right_depts:
-                right_depts.add(dept)
-                right_total_rows += 1  # dept header
-            right_total_rows += 1  # crew row
-
-        # Total grid rows = header + max(left, right) data rows
-        total_data_rows = max(left_total_rows, right_total_rows)
-        grid_end_row = row + total_data_rows  # Last row of the grid
-
-        # --- HEADER ROW (first row - thick TOP border) ---
+        # --- HEADER ROW (Row 15 - thick TOP border) ---
         # Left table headers (A-F) with thick top
         ws.write(row, 0, "TITLE", self.formats['cs_grid_header_left'])       # A: thick left + top
         ws.write(row, 1, "NAME", self.formats['cs_grid_header_internal'])    # B: thick top
@@ -1184,68 +1253,77 @@ class EpitomeWorkbookGenerator:
         ws.write(row, 10, "CALL", self.formats['cs_grid_header_internal_center'])  # K: thick top
         ws.write(row, 11, "LOC", self.formats['cs_grid_header_right_last'])  # L: thick right + top
 
-        row += 1
-
-        # Write both columns tracking position for thick borders
-        left_row = row
-        right_row = row
+        # --- DATA ROWS (Dynamic - no empty row padding) ---
+        left_row = DATA_START_ROW
+        right_row = DATA_START_ROW
 
         # Track current department for section headers
         left_dept = None
         right_dept = None
-        left_items_written = 0
-        right_items_written = 0
 
-        # Process left side (crew) with position awareness
-        for i, person in enumerate(left_crew):
+        # Process left side (crew) - compact, no empty rows
+        for person in left_crew:
             dept = person.get('department', 'Production')
-            # Check if this is the last item in the entire left column
-            remaining_left = left_total_rows - left_items_written
+            is_last = (left_row == grid_end_row)
 
             if dept != left_dept:
                 # Write department header spanning A-F with borders
-                is_last = (remaining_left == 1)
                 self._write_dept_header_left(ws, left_row, dept.upper(), is_last=is_last, grid_end_row=grid_end_row)
                 left_dept = dept
                 left_row += 1
-                left_items_written += 1
-                remaining_left -= 1
+                is_last = (left_row == grid_end_row)
 
             # Write crew data row with borders
-            is_last = (remaining_left == 1)
             self._write_crew_row_left(ws, left_row, person, crew_call, is_last=is_last, grid_end_row=grid_end_row)
             left_row += 1
-            left_items_written += 1
 
-        # Process right side (talent/vanity) with position awareness
-        right_start_row = row
-        for i, person in enumerate(right_crew):
+        # Process right side (talent/vanity) - compact, no empty rows
+        for person in right_crew:
             dept = person.get('department', 'Talent')
-            remaining_right = right_total_rows - right_items_written
+            is_last = (right_row == grid_end_row)
 
             if dept != right_dept:
                 # Write department header spanning G-L with borders
-                is_last = (remaining_right == 1)
-                self._write_dept_header_right(ws, right_start_row, dept.upper(), is_last=is_last, grid_end_row=grid_end_row)
+                self._write_dept_header_right(ws, right_row, dept.upper(), is_last=is_last, grid_end_row=grid_end_row)
                 right_dept = dept
-                right_start_row += 1
-                right_items_written += 1
-                remaining_right -= 1
+                right_row += 1
+                is_last = (right_row == grid_end_row)
 
             # Write talent data row with borders
             call_time = talent_call if 'talent' in dept.lower() else crew_call
-            is_last = (remaining_right == 1)
-            self._write_crew_row_right(ws, right_start_row, person, call_time, is_last=is_last, grid_end_row=grid_end_row)
-            right_start_row += 1
-            right_items_written += 1
+            self._write_crew_row_right(ws, right_row, person, call_time, is_last=is_last, grid_end_row=grid_end_row)
+            right_row += 1
 
-        # Determine where footer starts (after longest column)
-        footer_row = max(left_row, right_start_row) + 2
+        # Fill shorter side with empty rows up to grid_end_row (to maintain thick bottom border alignment)
+        while left_row <= grid_end_row:
+            is_last = (left_row == grid_end_row)
+            self._write_empty_row_left(ws, left_row, is_last=is_last)
+            left_row += 1
+
+        while right_row <= grid_end_row:
+            is_last = (right_row == grid_end_row)
+            self._write_empty_row_right(ws, right_row, is_last=is_last)
+            right_row += 1
 
         # ============================================
-        # FOOTER SECTIONS
+        # FOOTER SECTIONS (Dynamic position after crew grid)
         # ============================================
-        self._write_call_sheet_footer(ws, footer_row)
+        footer_start_row = grid_end_row + 1
+        self._write_call_sheet_footer(ws, footer_start_row)
+
+    def _count_crew_rows(self, crew_list: list) -> int:
+        """Count total rows needed for a crew list (including department headers)."""
+        if not crew_list:
+            return 0
+        total = 0
+        seen_depts = set()
+        for person in crew_list:
+            dept = person.get('department', 'Unknown')
+            if dept not in seen_depts:
+                seen_depts.add(dept)
+                total += 1  # Department header row
+            total += 1  # Crew member row
+        return total
 
     def _write_dept_header_left(self, ws, row: int, dept_name: str, is_last: bool = False, grid_end_row: int = 0):
         """Write department header for left section (A-F) with borders.
@@ -1343,77 +1421,180 @@ class EpitomeWorkbookGenerator:
             ws.write(row, 10, person.get('call_time', default_call), self.formats['cs_data_cell_center'])
             ws.write(row, 11, person.get('location', ''), self.formats['cs_data_cell_right_last'])
 
+    def _write_empty_row_left(self, ws, row: int, is_last: bool = False):
+        """Write an empty row for left section (A-F) with proper borders.
+
+        Args:
+            is_last: If True, use thick bottom border for row 43
+        """
+        if is_last:
+            # Row 43 - thick bottom border
+            ws.write(row, 0, '', self.formats['cs_data_bottom_left'])
+            ws.write(row, 1, '', self.formats['cs_data_bottom'])
+            ws.write(row, 2, '', self.formats['cs_data_bottom'])
+            ws.write(row, 3, '', self.formats['cs_data_bottom'])
+            ws.write(row, 4, '', self.formats['cs_data_bottom'])
+            ws.write(row, 5, '', self.formats['cs_data_bottom_right'])
+        else:
+            # Normal empty row
+            ws.write(row, 0, '', self.formats['cs_data_cell_left'])
+            ws.write(row, 1, '', self.formats['cs_data_cell'])
+            ws.write(row, 2, '', self.formats['cs_data_cell'])
+            ws.write(row, 3, '', self.formats['cs_data_cell'])
+            ws.write(row, 4, '', self.formats['cs_data_cell'])
+            ws.write(row, 5, '', self.formats['cs_data_cell_right'])
+
+    def _write_empty_row_right(self, ws, row: int, is_last: bool = False):
+        """Write an empty row for right section (G-L) with proper borders.
+
+        Args:
+            is_last: If True, use thick bottom border for row 43
+        """
+        if is_last:
+            # Row 43 - thick bottom border
+            ws.write(row, 6, '', self.formats['cs_data_bottom_left'])
+            ws.write(row, 7, '', self.formats['cs_data_bottom'])
+            ws.write(row, 8, '', self.formats['cs_data_bottom'])
+            ws.write(row, 9, '', self.formats['cs_data_bottom'])
+            ws.write(row, 10, '', self.formats['cs_data_bottom'])
+            ws.write(row, 11, '', self.formats['cs_data_bottom_right'])
+        else:
+            # Normal empty row
+            ws.write(row, 6, '', self.formats['cs_data_cell_left'])
+            ws.write(row, 7, '', self.formats['cs_data_cell'])
+            ws.write(row, 8, '', self.formats['cs_data_cell'])
+            ws.write(row, 9, '', self.formats['cs_data_cell'])
+            ws.write(row, 10, '', self.formats['cs_data_cell'])
+            ws.write(row, 11, '', self.formats['cs_data_cell_right_last'])
+
     def _get_default_left_crew(self) -> list:
-        """Default crew skeleton for left side of call sheet."""
+        """Default crew skeleton for left side of call sheet.
+
+        Matches sample file structure with full department sections:
+        - PRODUCTION (12 roles)
+        - CAMERA (3 roles)
+        - STILLS (5 roles)
+        - GRIP (4 roles)
+        """
         return [
+            # PRODUCTION (12 roles)
             {'department': 'Production', 'role': 'Director', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': 'Executive Producer', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': 'Producer', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': 'Production Manager', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': '1st AD', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': '2nd AD', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Truck', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Production', 'role': 'Production Assistant - Set', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Set', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Set', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Set', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Driver', 'name': '', 'phone': '', 'email': ''},
+            # CAMERA (3 roles)
             {'department': 'Camera', 'role': 'Director of Photography', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Camera', 'role': '1st AC', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Camera', 'role': '2nd AC / Cam PA', 'name': '', 'phone': '', 'email': ''},
+            # STILLS (5 roles)
             {'department': 'Stills', 'role': 'Photographer', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Stills', 'role': '1st Assist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Stills', 'role': '2nd Assist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Stills', 'role': '3rd Assist', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Stills', 'role': 'Digi Tech', 'name': '', 'phone': '', 'email': ''},
+            # GRIP (4 roles)
             {'department': 'Grip', 'role': 'Gaffer', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Grip', 'role': 'BBG', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Grip', 'role': 'Grip', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Grip', 'role': 'Grip', 'name': '', 'phone': '', 'email': ''},
         ]
 
     def _get_default_right_crew(self) -> list:
-        """Default crew skeleton for right side (talent/vanity)."""
+        """Default crew skeleton for right side (talent/vanity).
+
+        Matches sample file structure with full department sections:
+        - TALENT (5 roles)
+        - MGMT (5 roles)
+        - VANITY (6 roles)
+        - PRODUCTION SUPPORT (3 placeholder rows)
+        """
         return [
+            # TALENT (5 roles)
             {'department': 'Talent', 'role': 'Talent 1', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Talent', 'role': 'Talent 2', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Talent', 'role': 'Talent 3', 'name': '', 'phone': '', 'email': ''},
-            {'department': 'Management', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Talent', 'role': 'Talent 4', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Talent', 'role': 'Talent 5', 'name': '', 'phone': '', 'email': ''},
+            # MGMT (5 roles)
+            {'department': 'MGMT', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'MGMT', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'MGMT', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'MGMT', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'MGMT', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            # VANITY (6 roles)
             {'department': 'Vanity', 'role': 'Stylist', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Vanity', 'role': 'Stylist Assistant', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Vanity', 'role': 'Hair Stylist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'Hair Assist', 'name': '', 'phone': '', 'email': ''},
             {'department': 'Vanity', 'role': 'Makeup Artist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'MU Assist', 'name': '', 'phone': '', 'email': ''},
+            # PRODUCTION SUPPORT (3 placeholder rows)
+            {'department': 'Production Support', 'role': '', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production Support', 'role': '', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production Support', 'role': '', 'name': '', 'phone': '', 'email': ''},
         ]
 
     def _write_call_sheet_footer(self, ws, start_row: int):
-        """Write footer sections: Production Report, Announcements, Walkie Channels."""
-        row = start_row
+        """Write footer section matching sample structure.
 
-        # Section headers with borders
-        ws.write(row, 0, "PRODUCTION REPORT", self.formats['cs_footer_header_bordered'])
-        ws.write(row, 1, "", self.formats['cs_footer_header_bordered'])
-        ws.merge_range(row, 2, row, 5, "PRODUCTION REPORT NOTES", self.formats['cs_footer_header_bordered'])
-        ws.merge_range(row, 6, row, 8, "ANNOUNCEMENTS", self.formats['cs_footer_header_bordered'])
-        ws.merge_range(row, 9, row, 11, "WALKIE CHANNELS", self.formats['cs_footer_header_bordered'])
-        row += 1
+        Fixed structure:
+        - Row 44 (start_row): "PRODUCTION REPORT NOTES" header with thick top border
+        - Rows 45-49: Notes area with side borders only
+        - Row 50: Empty row with thick BOTTOM border (completes thick perimeter)
+        """
+        # Constants for fixed footer structure
+        NOTES_HEADER_ROW = start_row      # Row 44 (0-indexed: 43)
+        NOTES_START_ROW = start_row + 1   # Row 45 (0-indexed: 44)
+        NOTES_END_ROW = start_row + 5     # Row 49 (0-indexed: 48)
+        FOOTER_ROW = start_row + 6        # Row 50 (0-indexed: 49) - thick bottom
 
-        # Production Report fields
-        report_fields = [
-            ("First Shot AM", ""),
-            ("Lunch", ""),
-            ("First Shot PM", ""),
-            ("Camera Wrap", ""),
-            ("Crew Wrap", ""),
-        ]
+        # === ROW 44: "PRODUCTION REPORT NOTES" header with thick top border ===
+        # Left section: "PRODUCTION REPORT NOTES" spanning A-F
+        ws.write(NOTES_HEADER_ROW, 0, "PRODUCTION REPORT NOTES", self.formats['cs_notes_header_left'])
+        for col in range(1, 5):
+            ws.write(NOTES_HEADER_ROW, col, "", self.formats['cs_notes_header_center'])
+        ws.write(NOTES_HEADER_ROW, 5, "", self.formats['cs_notes_header_right'])  # F has thick right for divider
 
-        # Walkie channels
-        walkie_channels = [
-            ("Production", "1"),
-            ("Camera", "2"),
-            ("G&E", "3"),
-            ("Talent", "4"),
-            ("Transpo", "5"),
-        ]
+        # Right section: empty header spanning G-L
+        ws.write(NOTES_HEADER_ROW, 6, "", self.formats['cs_notes_header_left'])
+        for col in range(7, 11):
+            ws.write(NOTES_HEADER_ROW, col, "", self.formats['cs_notes_header_center'])
+        ws.write(NOTES_HEADER_ROW, 11, "", self.formats['cs_notes_header_right'])
 
-        for i, (field, _) in enumerate(report_fields):
-            ws.write(row + i, 0, field, self.formats['cs_footer_cell'])
-            ws.write(row + i, 1, "", self.formats['cs_footer_cell'])
+        # === ROWS 45-49: Notes area with side borders only ===
+        for row in range(NOTES_START_ROW, NOTES_END_ROW + 1):
+            # Left section (A-F)
+            ws.write(row, 0, "", self.formats['cs_notes_left'])  # A: thick left
+            for col in range(1, 5):
+                ws.write(row, col, "", self.formats['cs_notes_center'])  # B-E: no borders
+            ws.write(row, 5, "", self.formats['cs_notes_right'])  # F: thick right (divider)
 
-        for i, (channel, num) in enumerate(walkie_channels):
-            ws.merge_range(row + i, 9, row + i, 10, channel, self.formats['cs_footer_cell'])
-            ws.write(row + i, 11, num, self.formats['cs_footer_cell'])
+            # Right section (G-L)
+            ws.write(row, 6, "", self.formats['cs_notes_left'])  # G: thick left
+            for col in range(7, 11):
+                ws.write(row, col, "", self.formats['cs_notes_center'])  # H-K: no borders
+            ws.write(row, 11, "", self.formats['cs_notes_right'])  # L: thick right
+
+        # === ROW 50: Footer row with thick BOTTOM border (completes perimeter) ===
+        # Left section (A-F)
+        ws.write(FOOTER_ROW, 0, "", self.formats['cs_footer_bottomleft'])  # A: thick left + bottom
+        for col in range(1, 5):
+            ws.write(FOOTER_ROW, col, "", self.formats['cs_footer_bottom'])  # B-E: thick bottom
+        ws.write(FOOTER_ROW, 5, "", self.formats['cs_footer_bottom_divider'])  # F: thick bottom + right (divider)
+
+        # Right section (G-L)
+        ws.write(FOOTER_ROW, 6, "", self.formats['cs_footer_bottomleft'])  # G: thick left + bottom
+        for col in range(7, 11):
+            ws.write(FOOTER_ROW, col, "", self.formats['cs_footer_bottom'])  # H-K: thick bottom
+        ws.write(FOOTER_ROW, 11, "", self.formats['cs_footer_bottomright'])  # L: thick right + bottom
 
 
     # ==========================================
