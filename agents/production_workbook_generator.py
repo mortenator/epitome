@@ -64,6 +64,714 @@ class EpitomeWorkbookGenerator:
             'bold': True, 'font_size': 18, 'align': 'left'
         })
 
+        # ============================================
+        # CALL SHEET DASHBOARD FORMATS
+        # ============================================
+
+        # Large title banner (36pt for "CALL SHEET" header)
+        self.formats['cs_title_banner'] = self.workbook.add_format({
+            'bold': True, 'font_size': 36, 'align': 'center', 'valign': 'vcenter'
+        })
+
+        # Job info header (14pt bold)
+        self.formats['cs_job_info'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'valign': 'vcenter'
+        })
+
+        # Date/day display (12pt)
+        self.formats['cs_date'] = self.workbook.add_format({
+            'bold': True, 'font_size': 12, 'align': 'right', 'valign': 'vcenter'
+        })
+
+        # Call time large emphasis (18pt)
+        self.formats['cs_call_time_large'] = self.workbook.add_format({
+            'bold': True, 'font_size': 18, 'align': 'left', 'valign': 'vcenter'
+        })
+
+        # Call time medium (14pt)
+        self.formats['cs_call_time_medium'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'align': 'left', 'valign': 'vcenter'
+        })
+
+        # Section label (10pt bold, top-aligned)
+        self.formats['cs_label'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'top'
+        })
+
+        # Section value (10-11pt, top-aligned)
+        self.formats['cs_value'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'top'
+        })
+
+        # Section value bold
+        self.formats['cs_value_bold'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'top', 'bold': True
+        })
+
+        # Crew grid header (black bg, white text, 10pt)
+        self.formats['cs_grid_header'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'bg_color': '#000000',
+            'font_color': 'white', 'align': 'left', 'valign': 'vcenter'
+        })
+
+        # Crew grid header centered
+        self.formats['cs_grid_header_center'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'bg_color': '#000000',
+            'font_color': 'white', 'align': 'center', 'valign': 'vcenter'
+        })
+
+        # Department header inline (black bg, spans partial row)
+        self.formats['cs_dept_header'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'bg_color': '#000000',
+            'font_color': 'white', 'valign': 'vcenter'
+        })
+
+        # Crew data cell (no border, clean)
+        self.formats['cs_crew_cell'] = self.workbook.add_format({
+            'font_size': 11, 'valign': 'vcenter'
+        })
+
+        # Crew data cell centered (for call times)
+        self.formats['cs_crew_cell_center'] = self.workbook.add_format({
+            'font_size': 10, 'align': 'center', 'valign': 'vcenter'
+        })
+
+        # Footer section header
+        self.formats['cs_footer_header'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'bg_color': '#000000',
+            'font_color': 'white', 'valign': 'vcenter'
+        })
+
+        # ============================================
+        # BORDER-AWARE FORMATS (for grid fidelity)
+        # ============================================
+
+        # Data cell with white fill and thin borders (internal cells)
+        self.formats['cs_data_cell'] = self.workbook.add_format({
+            'font_size': 11,
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'border': 1,
+            'border_color': '#000000'
+        })
+
+        # Data cell centered with borders
+        self.formats['cs_data_cell_center'] = self.workbook.add_format({
+            'font_size': 10,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'border': 1,
+            'border_color': '#000000'
+        })
+
+        # Data cell left edge (thick left border - column A)
+        self.formats['cs_data_cell_left'] = self.workbook.add_format({
+            'font_size': 11,
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2,
+            'right': 1,
+            'top': 1,
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Data cell right edge (thick right border - column F separator)
+        self.formats['cs_data_cell_right'] = self.workbook.add_format({
+            'font_size': 10,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1,
+            'right': 2,
+            'top': 1,
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Data cell right edge last column (thick right - column L)
+        self.formats['cs_data_cell_right_last'] = self.workbook.add_format({
+            'font_size': 10,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1,
+            'right': 2,
+            'top': 1,
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Grid header left edge (thick left + thin others)
+        self.formats['cs_grid_header_left'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'left': 2,
+            'right': 1,
+            'top': 2,  # THICK top for grid perimeter
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Grid header internal (thick top for grid perimeter)
+        self.formats['cs_grid_header_internal'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'left': 1,
+            'right': 1,
+            'top': 2,  # THICK top for grid perimeter
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Grid header internal centered (thick top for grid perimeter)
+        self.formats['cs_grid_header_internal_center'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'align': 'center',
+            'left': 1,
+            'right': 1,
+            'top': 2,  # THICK top for grid perimeter
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Grid header right edge (thick right - F column, thick top)
+        self.formats['cs_grid_header_right'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'align': 'center',
+            'left': 1,
+            'right': 2,
+            'top': 2,  # THICK top for grid perimeter
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Grid header right edge last (thick right - L column, thick top)
+        self.formats['cs_grid_header_right_last'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'align': 'center',
+            'left': 1,
+            'right': 2,
+            'top': 2,  # THICK top for grid perimeter
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Department header left section (A-F) - black with borders
+        self.formats['cs_dept_left'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'left': 2,
+            'right': 1,
+            'top': 1,
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_internal'] = self.workbook.add_format({
+            'bg_color': '#000000',
+            'border': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_right'] = self.workbook.add_format({
+            'bg_color': '#000000',
+            'left': 1,
+            'right': 2,
+            'top': 1,
+            'bottom': 1,
+            'border_color': '#000000'
+        })
+
+        # Footer section with borders
+        self.formats['cs_footer_header_bordered'] = self.workbook.add_format({
+            'bold': True,
+            'font_size': 10,
+            'bg_color': '#000000',
+            'font_color': 'white',
+            'valign': 'vcenter',
+            'border': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_footer_cell'] = self.workbook.add_format({
+            'font_size': 10,
+            'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'border': 1,
+            'border_color': '#000000'
+        })
+
+        # ============================================
+        # HEADER ZONE FORMATS (Rows 1-14)
+        # ============================================
+
+        # Title banner row 1 - black fill, white text, thick top border
+        self.formats['cs_banner_topleft'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 2, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_banner_top'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'top': 2, 'bottom': 1, 'left': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_banner_topright'] = self.workbook.add_format({
+            'bold': True, 'font_size': 12, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter', 'align': 'right',
+            'right': 2, 'top': 2, 'bottom': 1, 'left': 1,
+            'border_color': '#000000'
+        })
+
+        # Title banner main (36pt centered)
+        self.formats['cs_banner_main'] = self.workbook.add_format({
+            'bold': True, 'font_size': 36, 'font_color': 'white',
+            'bg_color': '#000000', 'align': 'center', 'valign': 'vcenter',
+            'top': 2, 'bottom': 1, 'left': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Title banner row 2 - black fill, no top border emphasis
+        self.formats['cs_banner_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 2, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_banner_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 12, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter', 'align': 'right',
+            'right': 2, 'top': 1, 'bottom': 1, 'left': 1,
+            'border_color': '#000000'
+        })
+
+        # Black fill for empty cells in banner rows
+        self.formats['cs_banner_fill'] = self.workbook.add_format({
+            'bg_color': '#000000',
+            'top': 1, 'bottom': 1, 'left': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_banner_fill_top'] = self.workbook.add_format({
+            'bg_color': '#000000',
+            'top': 2, 'bottom': 1, 'left': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Section labels (bold, with borders) - different positions
+        self.formats['cs_label_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'left': 2, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_label'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_label_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Header data cells (white fill, bordered)
+        self.formats['cs_hdr_data_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_hdr_data'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_hdr_data_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_hdr_data_bold'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Large call times (18pt)
+        self.formats['cs_call_large'] = self.workbook.add_format({
+            'bold': True, 'font_size': 18, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_call_large_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 18, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Medium call times (14pt)
+        self.formats['cs_call_medium'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_call_medium_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 14, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Bottom edge of header zone (thick bottom)
+        self.formats['cs_hdr_bottom_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_hdr_bottom'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_hdr_bottom_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # ============================================
+        # "OUTSIDE-ONLY" SECTION FORMATS (Rows 9-14)
+        # These formats create perimeter-only borders
+        # ============================================
+
+        # Row 9 labels - top border, no bottom (connects to section below)
+        self.formats['cs_label_section_top'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_label_section_top_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 1, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_label_section_top_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 0, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Section middle rows (10-13) - only left/right borders, no top/bottom
+        self.formats['cs_section_mid'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_section_mid_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_section_mid_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 0, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_section_mid_bold'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Section bottom row (14) - only bottom/left/right, no top
+        self.formats['cs_section_bottom'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_section_bottom_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_section_bottom_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # ============================================
+        # "BOX" FORMATS FOR ROWS 3-8 (OUTSIDE-ONLY BORDERS)
+        # Each section has only perimeter borders, no internal lines
+        # ============================================
+
+        # Top-left corner (thick left for A column)
+        self.formats['cs_box_topleft_thick'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 2, 'top': 1, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Top-left corner (thin left for internal sections)
+        self.formats['cs_box_topleft'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Top edge (no left/right)
+        self.formats['cs_box_top'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 1, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Top-right corner (thin right)
+        self.formats['cs_box_topright'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 1, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Top-right corner (thick right for L column)
+        self.formats['cs_box_topright_thick'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 1, 'bottom': 0, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Left edge only (thick)
+        self.formats['cs_box_left_thick'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Left edge only (thin)
+        self.formats['cs_box_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 0, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Center (NO borders)
+        self.formats['cs_box_center'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'border': 0
+        })
+
+        # Right edge only (thin)
+        self.formats['cs_box_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 0, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Right edge only (thick)
+        self.formats['cs_box_right_thick'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 0, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # Bottom-left (thick left)
+        self.formats['cs_box_bottomleft_thick'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 2, 'top': 0, 'bottom': 1, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Bottom-left (thin)
+        self.formats['cs_box_bottomleft'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 1, 'top': 0, 'bottom': 1, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Bottom edge (no left/right)
+        self.formats['cs_box_bottom'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 1, 'right': 0,
+            'border_color': '#000000'
+        })
+
+        # Bottom-right (thin)
+        self.formats['cs_box_bottomright'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Bottom-right (thick)
+        self.formats['cs_box_bottomright_thick'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'bg_color': '#FFFFFF',
+            'left': 0, 'top': 0, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        # ============================================
+        # CREW GRID THICK PERIMETER FORMATS
+        # ============================================
+
+        # Top row of grid (thick top border)
+        self.formats['cs_data_top'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_top_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_top_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 2, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_top_center'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'align': 'center',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Bottom row of grid (thick bottom border)
+        self.formats['cs_data_bottom'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_bottom_left'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 2, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_bottom_right'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_data_bottom_center'] = self.workbook.add_format({
+            'font_size': 10, 'valign': 'vcenter', 'align': 'center',
+            'bg_color': '#FFFFFF',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        # Department headers for top/bottom positions
+        self.formats['cs_dept_top_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 2, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_top_internal'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 1, 'top': 2, 'bottom': 1, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_top_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 1, 'top': 2, 'bottom': 1, 'right': 2,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_bottom_left'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 2, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_bottom_internal'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 1,
+            'border_color': '#000000'
+        })
+
+        self.formats['cs_dept_bottom_right'] = self.workbook.add_format({
+            'bold': True, 'font_size': 10, 'font_color': 'white',
+            'bg_color': '#000000', 'valign': 'vcenter',
+            'left': 1, 'top': 1, 'bottom': 2, 'right': 2,
+            'border_color': '#000000'
+        })
+
     def generate(self):
         """Orchestrates the generation of all sheets matching sample workbook structure."""
         # Core sheets
@@ -154,127 +862,558 @@ class EpitomeWorkbookGenerator:
             row += 1
 
     # ==========================================
-    # SHEET 2: CALL SHEET (Dynamic per Day)
+    # SHEET 2: CALL SHEET (Dynamic per Day) - DASHBOARD LAYOUT
     # ==========================================
     def _write_call_sheet(self, day_info):
         day_num = day_info.get('day_number', 1)
+        total_days = len(self.data.get('schedule_days', [1]))
         ws_name = f"Call Sheet - Day {day_num}"
         ws = self.workbook.add_worksheet(ws_name)
 
-        # Column Setup
-        ws.set_column('A:F', 20)
+        # ============================================
+        # GRID SYSTEM: 12-column dashboard layout
+        # ============================================
+        ws.set_column('A:A', 27.0)   # Title/Role
+        ws.set_column('B:B', 22.9)   # Name
+        ws.set_column('C:C', 12.5)   # Phone
+        ws.set_column('D:D', 26.6)   # Email
+        ws.set_column('E:E', 6.4)    # Call (narrow)
+        ws.set_column('F:F', 9.9)    # Loc (narrow)
+        ws.set_column('G:G', 34.0)   # Talent Title (wide)
+        ws.set_column('H:H', 21.4)   # Talent Name
+        ws.set_column('I:I', 12.5)   # Talent Phone
+        ws.set_column('J:J', 23.9)   # Talent Email
+        ws.set_column('K:K', 9.4)    # Talent Call
+        ws.set_column('L:L', 10.5)   # Talent Loc
 
-        # --- HEADER BLOCK (Grid Layout) ---
+        # Hide gridlines for clean dashboard look
+        ws.hide_gridlines(2)
+
+        # Set row heights for header zone
+        ws.set_row(0, 21.75)  # Row 1
+        ws.set_row(1, 21.75)  # Row 2
+
+        # ============================================
+        # DATA EXTRACTION
+        # ============================================
         prod_info = self.data.get('production_info', {})
         logistics = self.data.get('logistics', {})
-
-        # Row 1-2: Titles
-        ws.merge_range('A1:B2', "EPITOME", self.formats['title_large'])
-        ws.merge_range('C1:D1', f"CALL SHEET - DAY {day_num}", self.formats['header_dark'])
-        ws.merge_range('C2:D2', day_info.get('date', 'TBD'), self.formats['cell_center'])
-
-        # Row 4-8: Logistics Grid
-        # Left Block: Production
-        ws.write('A4', "PRODUCTION CO:", self.formats['header_light'])
-        ws.write('B4', prod_info.get('production_company', 'Epitome'), self.formats['cell_normal'])
-        ws.write('A5', "JOB NAME:", self.formats['header_light'])
-        ws.write('B5', prod_info.get('job_name', 'TBD'), self.formats['cell_normal'])
-
-        # Middle Block: Location
         locs = logistics.get('locations', [])
         main_loc = locs[0] if locs else {}
-        ws.write('C4', "LOCATION:", self.formats['header_light'])
-        ws.write('C5', main_loc.get('name', 'TBD'), self.formats['cell_normal'])
-        ws.write('C6', main_loc.get('address', ''), self.formats['cell_normal'])
+        parking_loc = locs[1] if len(locs) > 1 else main_loc
 
-        # Right Block: Times & Weather
-        ws.write('E4', "CREW CALL:", self.formats['header_light'])
-        ws.write('F4', day_info.get('crew_call', 'TBD'), self.formats['cell_bold'])
-
-        # Get weather from day_info (enriched) or fallback to logistics
+        # Weather from day_info (enriched) or fallback
         day_weather = day_info.get('weather', {})
         weather = day_weather if day_weather else logistics.get('weather', {})
+        hosp = logistics.get('hospital', {})
 
-        # Temperature
-        ws.write('E5', "WEATHER:", self.formats['header_light'])
+        # ============================================
+        # HEADER ZONE: Rows 1-14 (Styled dashboard)
+        # ============================================
+        self._write_call_sheet_header_zone(ws, day_info, prod_info, logistics)
+
+        # ============================================
+        # CREW GRID: Row 16+ (Dual-column layout)
+        # ============================================
+        self._write_call_sheet_crew_grid(ws, day_info, start_row=15)
+
+    def _write_call_sheet_header_zone(self, ws, day_info: dict, prod_info: dict, logistics: dict):
+        """Write header zone (rows 1-14) with full styling matching sample template."""
+        day_num = day_info.get('day_number', 1)
+        total_days = len(self.data.get('schedule_days', [1]))
+
+        # Extract data
+        locs = logistics.get('locations', [])
+        main_loc = locs[0] if locs else {}
+        parking_loc = locs[1] if len(locs) > 1 else main_loc
+        day_weather = day_info.get('weather', {})
+        weather = day_weather if day_weather else logistics.get('weather', {})
+        hosp = logistics.get('hospital', {})
+
+        job_name = prod_info.get('job_name', 'TBD')
+        job_number = prod_info.get('job_number', '')
+        date_str = day_info.get('date', 'TBD')
+        crew_call = day_info.get('crew_call', 'TBD')
+        prod_call = day_info.get('production_call', crew_call)
+        breakfast_time = day_info.get('breakfast_time', 'TBD')
+        talent_call = day_info.get('talent_call', 'SEE BELOW')
+
+        # ============================================
+        # ROWS 1-2: Title Banner (BLACK FILL)
+        # ============================================
+        # Row 1: A1:B1 job name | C1:I1 (part of C1:I2 merge) | J1:L1 date
+        ws.merge_range('A1:B1', f"Job Name: {job_name}", self.formats['cs_banner_topleft'])
+        ws.merge_range('C1:I2', f"CALL SHEET - SHOOT DAY {day_num}", self.formats['cs_banner_main'])
+        ws.merge_range('J1:L1', date_str, self.formats['cs_banner_topright'])
+
+        # Row 2: A2:B2 job number | (C2:I2 already merged) | J2:L2 day counter
+        ws.merge_range('A2:B2', f"Job #: {job_number}", self.formats['cs_banner_left'])
+        ws.merge_range('J2:L2', f"SHOOT DAY {day_num} OF {total_days}", self.formats['cs_banner_right'])
+
+        # ============================================
+        # ROWS 3-8: Section boxes with OUTSIDE-ONLY borders
+        # Each section (A:B, C:E, F:G, H:I, J:L) has only perimeter borders
+        # ============================================
+
+        # === SECTION A3:B8 (Production Company) - thick left edge ===
+        # Row 3 (top of box)
+        ws.write('A3', "PRODUCTION COMPANY:", self.formats['cs_box_topleft_thick'])
+        ws.write('B3', "", self.formats['cs_box_topright'])
+
+        # Rows 4-7 (middle of box - only left/right borders)
+        ws.write('A4', "", self.formats['cs_box_left_thick'])
+        ws.write('B4', "", self.formats['cs_box_right'])
+        ws.write('A5', prod_info.get('production_company', 'Epitome'), self.formats['cs_box_left_thick'])
+        ws.write('B5', "", self.formats['cs_box_right'])
+        ws.write('A6', prod_info.get('address', ''), self.formats['cs_box_left_thick'])
+        ws.write('B6', "", self.formats['cs_box_right'])
+        ws.write('A7', "", self.formats['cs_box_left_thick'])
+        ws.write('B7', "", self.formats['cs_box_right'])
+
+        # Row 8 (bottom of box)
+        ws.write('A8', "", self.formats['cs_box_bottomleft_thick'])
+        ws.write('B8', "", self.formats['cs_box_bottomright'])
+
+        # === SECTION C3:E8 (Client) - thin edges ===
+        # Row 3 (top of box)
+        ws.write('C3', "CLIENT:", self.formats['cs_box_topleft'])
+        ws.write('D3', "", self.formats['cs_box_top'])
+        ws.write('E3', "", self.formats['cs_box_topright'])
+
+        # Rows 4-7 (middle of box - only left/right borders)
+        ws.write('C4', "", self.formats['cs_box_left'])
+        ws.write('D4', "", self.formats['cs_box_center'])
+        ws.write('E4', "", self.formats['cs_box_right'])
+        ws.write('C5', prod_info.get('client', 'TBD'), self.formats['cs_box_left'])
+        ws.write('D5', "", self.formats['cs_box_center'])
+        ws.write('E5', "", self.formats['cs_box_right'])
+        ws.write('C6', prod_info.get('client_address', ''), self.formats['cs_box_left'])
+        ws.write('D6', "", self.formats['cs_box_center'])
+        ws.write('E6', "", self.formats['cs_box_right'])
+        ws.write('C7', prod_info.get('client_address_2', ''), self.formats['cs_box_left'])
+        ws.write('D7', "", self.formats['cs_box_center'])
+        ws.write('E7', "", self.formats['cs_box_right'])
+
+        # Row 8 (bottom of box)
+        ws.write('C8', "", self.formats['cs_box_bottomleft'])
+        ws.write('D8', "", self.formats['cs_box_bottom'])
+        ws.write('E8', "", self.formats['cs_box_bottomright'])
+
+        # === SECTION F3:G8 (Filming Location) - thin edges ===
+        # Row 3 (top of box)
+        ws.merge_range('F3:G3', "FILMING LOCATION 1:", self.formats['cs_box_topleft'])
+
+        # Rows 4-7 (middle of box)
+        ws.write('F4', "", self.formats['cs_box_left'])
+        ws.write('G4', "", self.formats['cs_box_right'])
+        ws.merge_range('F5:G5', main_loc.get('name', 'TBD'), self.formats['cs_box_left'])
+        ws.merge_range('F6:G6', main_loc.get('address', ''), self.formats['cs_box_left'])
+        ws.merge_range('F7:G7', main_loc.get('address_line_2', ''), self.formats['cs_box_left'])
+
+        # Row 8 (bottom of box)
+        ws.merge_range('F8:G8', "", self.formats['cs_box_bottomleft'])
+
+        # === SECTION H3:I8 (Hospitals) - thin edges ===
+        # Row 3 (top of box)
+        ws.merge_range('H3:I3', "HOSPITALS:", self.formats['cs_box_topleft'])
+
+        # Rows 4-7 (middle of box)
+        ws.write('H4', "", self.formats['cs_box_left'])
+        ws.write('I4', "", self.formats['cs_box_right'])
+        ws.merge_range('H5:I5', hosp.get('name', 'TBD'), self.formats['cs_box_left'])
+        ws.merge_range('H6:I6', hosp.get('address', ''), self.formats['cs_box_left'])
+        ws.merge_range('H7:I7', hosp.get('address_line_2', ''), self.formats['cs_box_left'])
+
+        # Row 8 (bottom of box)
+        ws.merge_range('H8:I8', "", self.formats['cs_box_bottomleft'])
+
+        # === SECTION J3:L8 (Call Times / Weather) - thick right edge ===
+        # Row 3 (top of box)
+        ws.write('J3', "GENERAL CREW CALL:", self.formats['cs_box_topleft'])
+        ws.write('K3', "PRODUCTION CALL:", self.formats['cs_box_top'])
+        ws.write('L3', "", self.formats['cs_box_topright_thick'])
+
+        # Rows 4-5 (merged call times)
+        ws.merge_range('J4:J5', crew_call, self.formats['cs_call_large'])
+        ws.merge_range('K4:L5', prod_call, self.formats['cs_call_medium_right'])
+
+        # Row 6 (middle labels)
+        ws.write('J6', "COURTESY BFAST RTS:", self.formats['cs_box_left'])
+        ws.write('K6', "TALENT CALL:", self.formats['cs_box_center'])
+        ws.write('L6', "", self.formats['cs_box_right_thick'])
+
+        # Rows 7-8 (merged call times)
+        ws.merge_range('J7:J8', breakfast_time, self.formats['cs_call_medium'])
+        ws.merge_range('K7:L8', talent_call, self.formats['cs_call_medium_right'])
+
+        # ============================================
+        # ROW 9: Section Headers (top of "outside-only" bordered sections)
+        # Uses formats with TOP border only (no bottom), connecting to data below
+        # ============================================
+        ws.merge_range('A9:B9', "PRODUCTION CELLS:", self.formats['cs_label_section_top_left'])
+        ws.merge_range('C9:E9', "LABEL/AGENCY:", self.formats['cs_label_section_top'])
+        ws.merge_range('F9:G9', "CREW PARKING", self.formats['cs_label_section_top'])
+        ws.merge_range('H9:I9', "TRUCK PARKING", self.formats['cs_label_section_top'])
+        ws.merge_range('J9:L9', f"WEATHER: {weather.get('conditions', '')}", self.formats['cs_label_section_top_right'])
+
+        # ============================================
+        # ROWS 10-13: Contact Info + Weather Details (MIDDLE of sections)
+        # Uses formats with ONLY left/right borders (no top, no bottom)
+        # ============================================
+        # Weather details
         temp = weather.get('temperature', {})
         if isinstance(temp, dict):
-            temp_str = f"H: {temp.get('high', '-')} L: {temp.get('low', '-')}"
+            high_temp = temp.get('high', '°F')
+            low_temp = temp.get('low', '°F')
         else:
-            temp_str = f"H: {weather.get('high', '-')} L: {weather.get('low', '-')}"
-        conditions = weather.get('conditions', '')
-        if conditions:
-            temp_str += f" - {conditions}"
-        ws.write('F5', temp_str, self.formats['cell_normal'])
+            high_temp = weather.get('high', '°F')
+            low_temp = weather.get('low', '°F')
 
-        # Sunrise/Sunset
-        ws.write('E6', "SUNRISE/SUNSET:", self.formats['header_light'])
-        sunrise = weather.get('sunrise', 'TBD')
-        sunset = weather.get('sunset', 'TBD')
-        ws.write('F6', f"{sunrise} / {sunset}", self.formats['cell_normal'])
+        # Row 10 (first data row - only left/right borders)
+        ws.merge_range('A10:B10', "", self.formats['cs_section_mid_left'])
+        ws.merge_range('C10:E10', "", self.formats['cs_section_mid'])
+        ws.merge_range('F10:G10', "", self.formats['cs_section_mid'])
+        ws.merge_range('H10:I10', main_loc.get('name', ''), self.formats['cs_section_mid'])
+        ws.merge_range('J10:L10', f"High: {high_temp}", self.formats['cs_section_mid_right'])
 
-        # Wind
-        ws.write('E7', "WIND:", self.formats['header_light'])
-        ws.write('F7', weather.get('wind', 'TBD'), self.formats['cell_normal'])
+        # Row 11 (middle data row - only left/right borders)
+        producer = self._get_crew_by_role('Producer')
+        ws.merge_range('A11:B11', f"Producer: {producer.get('name', '')} - {producer.get('phone', '')}", self.formats['cs_section_mid_left'])
+        ws.merge_range('C11:E11', "", self.formats['cs_section_mid'])
+        ws.merge_range('F11:G11', parking_loc.get('parking', 'TBD'), self.formats['cs_section_mid_bold'])
+        ws.merge_range('H11:I11', main_loc.get('truck_parking', ''), self.formats['cs_section_mid'])
+        ws.merge_range('J11:L11', f"Low: {low_temp}", self.formats['cs_section_mid_right'])
 
-        ws.write('A8', "NEAREST HOSPITAL:", self.formats['header_light'])
-        hosp = logistics.get('hospital', {})
-        ws.write('B8', f"{hosp.get('name','TBD')} - {hosp.get('address','')}", self.formats['cell_normal'])
+        # Row 12 (middle data row - only left/right borders)
+        prod_mgr = self._get_crew_by_role('Production Manager')
+        ws.merge_range('A12:B12', f"Prod. Manager: {prod_mgr.get('name', '')} - {prod_mgr.get('phone', '')}", self.formats['cs_section_mid_left'])
+        ws.merge_range('C12:E12', "", self.formats['cs_section_mid'])
+        ws.merge_range('F12:G12', "", self.formats['cs_section_mid'])
+        ws.merge_range('H12:I12', "", self.formats['cs_section_mid'])
+        ws.merge_range('J12:L12', f"Sunrise: {weather.get('sunrise', 'TBD')}", self.formats['cs_section_mid_right'])
 
-        # --- CREW GRID ---
-        start_row = 11
-        headers = ['TITLE', 'NAME', 'PHONE', 'EMAIL', 'CALL TIME', 'LOCATION']
-        for col, h in enumerate(headers):
-            ws.write(start_row, col, h, self.formats['header_dark'])
+        # Row 13 (middle data row - only left/right borders)
+        ws.merge_range('A13:B13', "", self.formats['cs_section_mid_left'])
+        ws.merge_range('C13:E13', "", self.formats['cs_section_mid'])
+        ws.merge_range('F13:G13', "", self.formats['cs_section_mid'])
+        ws.merge_range('H13:I13', "", self.formats['cs_section_mid'])
+        ws.merge_range('J13:L13', f"Sunset: {weather.get('sunset', 'TBD')}", self.formats['cs_section_mid_right'])
 
-        row = start_row + 1
+        # ============================================
+        # ROW 14: Bottom edge of sections (thick bottom border, no top)
+        # ============================================
+        ws.merge_range('A14:B14', "", self.formats['cs_section_bottom_left'])
+        ws.merge_range('C14:E14', "", self.formats['cs_section_bottom'])
+        ws.merge_range('F14:G14', "", self.formats['cs_section_bottom'])
+        ws.merge_range('H14:I14', "", self.formats['cs_section_bottom'])
+        ws.merge_range('J14:L14', f"Precip: {weather.get('precipitation', 'TBD')}", self.formats['cs_section_bottom_right'])
 
-        # If we have specific crew for this day, filter them. Otherwise use master list.
+    def _get_crew_by_role(self, role: str) -> dict:
+        """Helper to find a crew member by role."""
         crew = self.data.get('crew_list', [])
+        for person in crew:
+            if person.get('role', '').lower() == role.lower():
+                return person
+        return {}
 
-        # Pre-populate specific roles if list is empty (The "Epitome" requirement)
+    def _write_call_sheet_crew_grid(self, ws, day_info, start_row: int):
+        """Write the dual-column crew grid section with thick perimeter borders."""
+        row = start_row
+
+        # --- CREW DATA PREPARATION ---
+        crew = self.data.get('crew_list', [])
+        crew_call = day_info.get('crew_call', 'TBD')
+        talent_call = day_info.get('talent_call', 'TBD')
+
+        # Separate crew into left (production/camera/grip) and right (talent/vanity)
+        right_departments = ['Talent', 'Vanity', 'H/MU', 'Wardrobe', 'Hair', 'Makeup', 'Management', 'MGMT']
+
+        left_crew = []
+        right_crew = []
+
+        for person in crew:
+            dept = person.get('department', 'Production')
+            if any(d.lower() in dept.lower() for d in right_departments):
+                right_crew.append(person)
+            else:
+                left_crew.append(person)
+
+        # If no crew data, use default skeleton
         if not crew:
-            default_roles = [
-                ('PRODUCTION', ['Executive Producer', 'Producer', 'Prod. Supervisor', 'PA - Set']),
-                ('CAMERA', ['Director of Photography', '1st AC', '2nd AC', 'DIT']),
-                ('AUDIO', ['Sound Mixer', 'Boom Op']),
-                ('G&E', ['Gaffer', 'Key Grip', 'Best Boy']),
-                ('TALENT', ['Talent 1', 'Talent 2'])
-            ]
+            left_crew = self._get_default_left_crew()
+            right_crew = self._get_default_right_crew()
 
-            for dept, roles in default_roles:
-                ws.merge_range(row, 0, row, 5, dept, self.formats['dept_header'])
-                row += 1
-                for role in roles:
-                    ws.write(row, 0, role, self.formats['cell_bold'])
-                    ws.write_blank(row, 1, None, self.formats['cell_normal']) # Name
-                    ws.write_blank(row, 2, None, self.formats['cell_normal']) # Phone
-                    ws.write_blank(row, 3, None, self.formats['cell_normal']) # Email
+        # Pre-calculate total rows needed for thick border placement
+        # Count unique departments + crew members for each side
+        left_depts = set()
+        left_total_rows = 0
+        for person in left_crew:
+            dept = person.get('department', 'Production')
+            if dept not in left_depts:
+                left_depts.add(dept)
+                left_total_rows += 1  # dept header
+            left_total_rows += 1  # crew row
 
-                    # Fill Call time based on day_info
-                    call_time = day_info.get('crew_call', 'TBD')
-                    if dept == 'TALENT': call_time = day_info.get('talent_call', 'TBD')
+        right_depts = set()
+        right_total_rows = 0
+        for person in right_crew:
+            dept = person.get('department', 'Talent')
+            if dept not in right_depts:
+                right_depts.add(dept)
+                right_total_rows += 1  # dept header
+            right_total_rows += 1  # crew row
 
-                    ws.write(row, 4, call_time, self.formats['cell_center'])
-                    ws.write(row, 5, "Set", self.formats['cell_center'])
-                    row += 1
+        # Total grid rows = header + max(left, right) data rows
+        total_data_rows = max(left_total_rows, right_total_rows)
+        grid_end_row = row + total_data_rows  # Last row of the grid
+
+        # --- HEADER ROW (first row - thick TOP border) ---
+        # Left table headers (A-F) with thick top
+        ws.write(row, 0, "TITLE", self.formats['cs_grid_header_left'])       # A: thick left + top
+        ws.write(row, 1, "NAME", self.formats['cs_grid_header_internal'])    # B: thick top
+        ws.write(row, 2, "PHONE", self.formats['cs_grid_header_internal'])   # C: thick top
+        ws.write(row, 3, "EMAIL", self.formats['cs_grid_header_internal'])   # D: thick top
+        ws.write(row, 4, "CALL", self.formats['cs_grid_header_internal_center'])  # E: thick top
+        ws.write(row, 5, "LOC", self.formats['cs_grid_header_right'])        # F: thick right + top
+
+        # Right table headers (G-L) - Talent with thick top
+        ws.write(row, 6, "TALENT", self.formats['cs_grid_header_left'])      # G: thick left + top
+        ws.write(row, 7, "NAME", self.formats['cs_grid_header_internal'])    # H: thick top
+        ws.write(row, 8, "PHONE", self.formats['cs_grid_header_internal'])   # I: thick top
+        ws.write(row, 9, "EMAIL", self.formats['cs_grid_header_internal'])   # J: thick top
+        ws.write(row, 10, "CALL", self.formats['cs_grid_header_internal_center'])  # K: thick top
+        ws.write(row, 11, "LOC", self.formats['cs_grid_header_right_last'])  # L: thick right + top
+
+        row += 1
+
+        # Write both columns tracking position for thick borders
+        left_row = row
+        right_row = row
+
+        # Track current department for section headers
+        left_dept = None
+        right_dept = None
+        left_items_written = 0
+        right_items_written = 0
+
+        # Process left side (crew) with position awareness
+        for i, person in enumerate(left_crew):
+            dept = person.get('department', 'Production')
+            # Check if this is the last item in the entire left column
+            remaining_left = left_total_rows - left_items_written
+
+            if dept != left_dept:
+                # Write department header spanning A-F with borders
+                is_last = (remaining_left == 1)
+                self._write_dept_header_left(ws, left_row, dept.upper(), is_last=is_last, grid_end_row=grid_end_row)
+                left_dept = dept
+                left_row += 1
+                left_items_written += 1
+                remaining_left -= 1
+
+            # Write crew data row with borders
+            is_last = (remaining_left == 1)
+            self._write_crew_row_left(ws, left_row, person, crew_call, is_last=is_last, grid_end_row=grid_end_row)
+            left_row += 1
+            left_items_written += 1
+
+        # Process right side (talent/vanity) with position awareness
+        right_start_row = row
+        for i, person in enumerate(right_crew):
+            dept = person.get('department', 'Talent')
+            remaining_right = right_total_rows - right_items_written
+
+            if dept != right_dept:
+                # Write department header spanning G-L with borders
+                is_last = (remaining_right == 1)
+                self._write_dept_header_right(ws, right_start_row, dept.upper(), is_last=is_last, grid_end_row=grid_end_row)
+                right_dept = dept
+                right_start_row += 1
+                right_items_written += 1
+                remaining_right -= 1
+
+            # Write talent data row with borders
+            call_time = talent_call if 'talent' in dept.lower() else crew_call
+            is_last = (remaining_right == 1)
+            self._write_crew_row_right(ws, right_start_row, person, call_time, is_last=is_last, grid_end_row=grid_end_row)
+            right_start_row += 1
+            right_items_written += 1
+
+        # Determine where footer starts (after longest column)
+        footer_row = max(left_row, right_start_row) + 2
+
+        # ============================================
+        # FOOTER SECTIONS
+        # ============================================
+        self._write_call_sheet_footer(ws, footer_row)
+
+    def _write_dept_header_left(self, ws, row: int, dept_name: str, is_last: bool = False, grid_end_row: int = 0):
+        """Write department header for left section (A-F) with borders.
+
+        Args:
+            is_last: If True, this is the last row - use thick bottom border
+            grid_end_row: The row number where the grid ends (for thick bottom)
+        """
+        if is_last or row == grid_end_row:
+            # Last row - thick bottom border
+            ws.write(row, 0, dept_name, self.formats['cs_dept_bottom_left'])
+            ws.write(row, 1, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 2, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 3, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 4, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 5, '', self.formats['cs_dept_bottom_right'])
         else:
-            # Render actual crew list
-            current_dept = None
-            for person in crew:
-                dept = person.get('department', 'Crew')
-                if dept != current_dept:
-                    ws.merge_range(row, 0, row, 5, dept.upper(), self.formats['dept_header'])
-                    row += 1
-                    current_dept = dept
+            # Normal row
+            ws.write(row, 0, dept_name, self.formats['cs_dept_left'])
+            ws.write(row, 1, '', self.formats['cs_dept_internal'])
+            ws.write(row, 2, '', self.formats['cs_dept_internal'])
+            ws.write(row, 3, '', self.formats['cs_dept_internal'])
+            ws.write(row, 4, '', self.formats['cs_dept_internal'])
+            ws.write(row, 5, '', self.formats['cs_dept_right'])
 
-                ws.write(row, 0, person.get('role', ''), self.formats['cell_bold'])
-                ws.write(row, 1, person.get('name', ''), self.formats['cell_normal'])
-                ws.write(row, 2, person.get('phone', ''), self.formats['cell_normal'])
-                ws.write(row, 3, person.get('email', ''), self.formats['cell_normal'])
-                ws.write(row, 4, day_info.get('crew_call', '07:00 AM'), self.formats['cell_center'])
-                ws.write(row, 5, "Set", self.formats['cell_center'])
-                row += 1
+    def _write_dept_header_right(self, ws, row: int, dept_name: str, is_last: bool = False, grid_end_row: int = 0):
+        """Write department header for right section (G-L) with borders.
+
+        Args:
+            is_last: If True, this is the last row - use thick bottom border
+            grid_end_row: The row number where the grid ends (for thick bottom)
+        """
+        if is_last or row == grid_end_row:
+            # Last row - thick bottom border
+            ws.write(row, 6, dept_name, self.formats['cs_dept_bottom_left'])
+            ws.write(row, 7, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 8, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 9, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 10, '', self.formats['cs_dept_bottom_internal'])
+            ws.write(row, 11, '', self.formats['cs_dept_bottom_right'])
+        else:
+            # Normal row
+            ws.write(row, 6, dept_name, self.formats['cs_dept_left'])
+            ws.write(row, 7, '', self.formats['cs_dept_internal'])
+            ws.write(row, 8, '', self.formats['cs_dept_internal'])
+            ws.write(row, 9, '', self.formats['cs_dept_internal'])
+            ws.write(row, 10, '', self.formats['cs_dept_internal'])
+            ws.write(row, 11, '', self.formats['cs_dept_right'])
+
+    def _write_crew_row_left(self, ws, row: int, person: dict, default_call: str, is_last: bool = False, grid_end_row: int = 0):
+        """Write a single crew member row for left section (A-F) with borders.
+
+        Args:
+            is_last: If True, this is the last row - use thick bottom border
+            grid_end_row: The row number where the grid ends (for thick bottom)
+        """
+        if is_last or row == grid_end_row:
+            # Last row - thick bottom border
+            ws.write(row, 0, person.get('role', ''), self.formats['cs_data_bottom_left'])
+            ws.write(row, 1, person.get('name', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 2, person.get('phone', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 3, person.get('email', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 4, person.get('call_time', default_call), self.formats['cs_data_bottom_center'])
+            ws.write(row, 5, person.get('location', ''), self.formats['cs_data_bottom_right'])
+        else:
+            # Normal row
+            ws.write(row, 0, person.get('role', ''), self.formats['cs_data_cell_left'])
+            ws.write(row, 1, person.get('name', ''), self.formats['cs_data_cell'])
+            ws.write(row, 2, person.get('phone', ''), self.formats['cs_data_cell'])
+            ws.write(row, 3, person.get('email', ''), self.formats['cs_data_cell'])
+            ws.write(row, 4, person.get('call_time', default_call), self.formats['cs_data_cell_center'])
+            ws.write(row, 5, person.get('location', ''), self.formats['cs_data_cell_right'])
+
+    def _write_crew_row_right(self, ws, row: int, person: dict, default_call: str, is_last: bool = False, grid_end_row: int = 0):
+        """Write a single crew member row for right section (G-L) with borders.
+
+        Args:
+            is_last: If True, this is the last row - use thick bottom border
+            grid_end_row: The row number where the grid ends (for thick bottom)
+        """
+        if is_last or row == grid_end_row:
+            # Last row - thick bottom border
+            ws.write(row, 6, person.get('role', ''), self.formats['cs_data_bottom_left'])
+            ws.write(row, 7, person.get('name', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 8, person.get('phone', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 9, person.get('email', ''), self.formats['cs_data_bottom'])
+            ws.write(row, 10, person.get('call_time', default_call), self.formats['cs_data_bottom_center'])
+            ws.write(row, 11, person.get('location', ''), self.formats['cs_data_bottom_right'])
+        else:
+            # Normal row
+            ws.write(row, 6, person.get('role', ''), self.formats['cs_data_cell_left'])
+            ws.write(row, 7, person.get('name', ''), self.formats['cs_data_cell'])
+            ws.write(row, 8, person.get('phone', ''), self.formats['cs_data_cell'])
+            ws.write(row, 9, person.get('email', ''), self.formats['cs_data_cell'])
+            ws.write(row, 10, person.get('call_time', default_call), self.formats['cs_data_cell_center'])
+            ws.write(row, 11, person.get('location', ''), self.formats['cs_data_cell_right_last'])
+
+    def _get_default_left_crew(self) -> list:
+        """Default crew skeleton for left side of call sheet."""
+        return [
+            {'department': 'Production', 'role': 'Director', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Executive Producer', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Producer', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Manager', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': '1st AD', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': '2nd AD', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Production', 'role': 'Production Assistant - Set', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Camera', 'role': 'Director of Photography', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Camera', 'role': '1st AC', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Camera', 'role': '2nd AC / Cam PA', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Stills', 'role': 'Photographer', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Stills', 'role': '1st Assist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Stills', 'role': 'Digi Tech', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Grip', 'role': 'Gaffer', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Grip', 'role': 'BBG', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Grip', 'role': 'Grip', 'name': '', 'phone': '', 'email': ''},
+        ]
+
+    def _get_default_right_crew(self) -> list:
+        """Default crew skeleton for right side (talent/vanity)."""
+        return [
+            {'department': 'Talent', 'role': 'Talent 1', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Talent', 'role': 'Talent 2', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Talent', 'role': 'Talent 3', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Management', 'role': 'MGMT', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'Stylist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'Stylist Assistant', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'Hair Stylist', 'name': '', 'phone': '', 'email': ''},
+            {'department': 'Vanity', 'role': 'Makeup Artist', 'name': '', 'phone': '', 'email': ''},
+        ]
+
+    def _write_call_sheet_footer(self, ws, start_row: int):
+        """Write footer sections: Production Report, Announcements, Walkie Channels."""
+        row = start_row
+
+        # Section headers with borders
+        ws.write(row, 0, "PRODUCTION REPORT", self.formats['cs_footer_header_bordered'])
+        ws.write(row, 1, "", self.formats['cs_footer_header_bordered'])
+        ws.merge_range(row, 2, row, 5, "PRODUCTION REPORT NOTES", self.formats['cs_footer_header_bordered'])
+        ws.merge_range(row, 6, row, 8, "ANNOUNCEMENTS", self.formats['cs_footer_header_bordered'])
+        ws.merge_range(row, 9, row, 11, "WALKIE CHANNELS", self.formats['cs_footer_header_bordered'])
+        row += 1
+
+        # Production Report fields
+        report_fields = [
+            ("First Shot AM", ""),
+            ("Lunch", ""),
+            ("First Shot PM", ""),
+            ("Camera Wrap", ""),
+            ("Crew Wrap", ""),
+        ]
+
+        # Walkie channels
+        walkie_channels = [
+            ("Production", "1"),
+            ("Camera", "2"),
+            ("G&E", "3"),
+            ("Talent", "4"),
+            ("Transpo", "5"),
+        ]
+
+        for i, (field, _) in enumerate(report_fields):
+            ws.write(row + i, 0, field, self.formats['cs_footer_cell'])
+            ws.write(row + i, 1, "", self.formats['cs_footer_cell'])
+
+        for i, (channel, num) in enumerate(walkie_channels):
+            ws.merge_range(row + i, 9, row + i, 10, channel, self.formats['cs_footer_cell'])
+            ws.write(row + i, 11, num, self.formats['cs_footer_cell'])
 
 
     # ==========================================
