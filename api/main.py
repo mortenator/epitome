@@ -48,21 +48,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
+# Mount static files (for Vite-built frontend assets)
+# IMPORTANT: Mount more specific paths first, then general ones
 if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    # Serve assets directory (JS, CSS from Vite build)
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    
+    # Serve other static files (favicon, robots.txt, etc.) from root of static
+    # But exclude index.html and assets/ since they're handled separately
+    # Note: FastAPI StaticFiles will serve files from the directory root
+    # We'll handle index.html via the route handler instead
 
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
-    """Serve the main HTML page."""
+    """Serve the main HTML page from Vite build."""
     index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
         return HTMLResponse(
-            content="<h1>Epitome API</h1><p>Frontend not found. Place index.html in /static/</p>",
+            content="<h1>Epitome API</h1><p>Frontend not found. Run ./sync_frontend.sh to build the frontend.</p>",
             status_code=200
         )
     return FileResponse(str(index_path))
+
+
+# Note: Catch-all route moved to end of file to avoid interfering with other routes
 
 
 @app.post("/api/generate")
@@ -265,3 +277,23 @@ async def get_result(job_id: str):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "epitome-api"}
+
+
+# Catch-all route for SPA routing (Vite React Router)
+# MUST be last - catches all non-API routes
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve SPA routes - return index.html for non-API routes."""
+    # Don't interfere with API routes, health check, or static assets
+    # FastAPI will handle /assets/ and other static files via mounted StaticFiles
+    if (full_path.startswith("api/") or 
+        full_path == "health"):
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # For any other route (including root paths that don't match mounted routes),
+    # serve index.html for SPA routing
+    # FastAPI's mounted StaticFiles will handle /assets/ requests before this route
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    raise HTTPException(status_code=404, detail="Frontend not found")
