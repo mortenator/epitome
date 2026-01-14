@@ -1,7 +1,3 @@
-// Epitome Production Management Database Schema
-// PostgreSQL + Prisma ORM
-// Version: 1.0.0
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,292 +5,436 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Used for migrations in production (bypasses connection pooler)
+  directUrl = env("DIRECT_URL")
 }
 
-// =============================================================================
-// SECTION 1: CORE HIERARCHY (Auth & Organization)
-// =============================================================================
+model budget_fringes {
+  id              String          @id
+  name            String
+  fringeType      FringeType
+  rate            Decimal         @db.Decimal(5, 4)
+  isActive        Boolean         @default(true)
+  sectionId       String
+  budget_sections budget_sections @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
-model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique // URL-friendly identifier
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Default financial settings (can be overridden per project)
-  defaultInsuranceRate    Decimal @default(0.03) @db.Decimal(5, 4) // 3%
-  defaultPayrollTaxRate   Decimal @default(0.23) @db.Decimal(5, 4) // 23% P&W
-  defaultWorkersCompRate  Decimal @default(0.02) @db.Decimal(5, 4) // 2%
-  defaultAgencyFeeRate    Decimal @default(0.17) @db.Decimal(5, 4) // 17.65% standard
-
-  // Relations
-  users         User[]
-  projects      Project[]
-  crewDirectory CrewMember[]
-  vendors       Vendor[]
-
-  @@map("organizations")
+  @@index([sectionId])
 }
 
-model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
+model budget_lines {
+  id              String            @id
+  lineNumber      Int
+  description     String
+  sortOrder       Int
+  quantity        Decimal           @default(1) @db.Decimal(10, 2)
+  rate            Decimal           @default(0) @db.Decimal(12, 2)
+  days            Decimal           @default(1) @db.Decimal(10, 2)
+  ot15Hours       Decimal           @default(0) @db.Decimal(10, 2)
+  ot20Hours       Decimal           @default(0) @db.Decimal(10, 2)
+  estimatedTotal  Decimal           @default(0) @db.Decimal(14, 2)
+  notes           String?
+  isContracted    Boolean           @default(false)
+  sectionId       String
+  budget_sections budget_sections   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  project_crew    project_crew[]
+  purchase_orders purchase_orders[]
+
+  @@unique([sectionId, lineNumber])
+  @@index([sectionId])
+}
+
+model budget_sections {
+  id             String            @id
+  code           String
   name           String
-  hashedPassword String?
-  role           UserRole @default(CREW)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  sortOrder      Int
+  sectionType    BudgetSectionType @default(LABOR)
+  budgetId       String
+  budget_fringes budget_fringes[]
+  budget_lines   budget_lines[]
+  budgets        budgets           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
 
-  // Relations
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  // Audit trail
-  createdBudgets   Budget[]        @relation("BudgetCreator")
-  createdPOs       PurchaseOrder[] @relation("POCreator")
-  approvedPOs      PurchaseOrder[] @relation("POApprover")
-  submittedTimecards Timecard[]    @relation("TimecardSubmitter")
-
-  @@index([organizationId])
-  @@map("users")
+  @@unique([budgetId, code])
+  @@index([budgetId])
 }
 
-enum UserRole {
-  ADMIN      // Full access
-  PRODUCER   // Can create/edit budgets, approve POs
-  COORDINATOR // Can edit call sheets, manage crew
-  CREW       // View-only access to their projects
-}
-
-// =============================================================================
-// SECTION 2: PROJECT (The Central Hub)
-// =============================================================================
-
-model Project {
-  id        String        @id @default(cuid())
-  status    ProjectStatus @default(ACTIVE)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  // Core identification
-  jobNumber String  // e.g., "2024-NIKE-001"
-  jobName   String  // e.g., "Nike Air Max Summer Campaign"
-  client    String  // e.g., "Nike"
-  agency    String? // e.g., "Wieden+Kennedy"
-  brand     String? // e.g., "Air Max"
-
-  // Timeline
-  bidDate       DateTime?
-  awardDate     DateTime?
-  prepStartDate DateTime?
-  shootStartDate DateTime?
-  shootEndDate   DateTime?
-  wrapDate      DateTime?
-
-  // Project-level overrides (null = use org defaults)
-  insuranceRate   Decimal? @db.Decimal(5, 4)
-  payrollTaxRate  Decimal? @db.Decimal(5, 4)
-  workersCompRate Decimal? @db.Decimal(5, 4)
-  agencyFeeRate   Decimal? @db.Decimal(5, 4)
-
-  // Relations
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  budgets        Budget[]
-  projectCrew    ProjectCrew[]
-  purchaseOrders PurchaseOrder[]
-  callSheets     CallSheet[]
-  locations      Location[]
-
-  @@unique([organizationId, jobNumber])
-  @@index([organizationId])
-  @@index([status])
-  @@map("projects")
-}
-
-enum ProjectStatus {
-  BID        // Bidding phase
-  AWARDED    // Won the bid
-  ACTIVE     // In production
-  WRAPPED    // Shooting complete
-  CLOSED     // Fully reconciled
-  CANCELLED  // Project cancelled
-}
-
-// =============================================================================
-// SECTION 3: BUDGETING ENGINE (AICP/Hot Budget Structure)
-// =============================================================================
-
-model Budget {
-  id        String       @id @default(cuid())
-  version   Int          @default(1) // v1, v2, v3...
-  name      String       // e.g., "Initial Bid", "Client Approved", "Final"
-  status    BudgetStatus @default(DRAFT)
-  isActive  Boolean      @default(false) // Only one active budget per project
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  lockedAt  DateTime?    // When approved/locked
-
-  // Relations
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  createdById String
-  createdBy   User   @relation("BudgetCreator", fields: [createdById], references: [id])
-
-  sections BudgetSection[]
+model budgets {
+  id              String            @id
+  version         Int               @default(1)
+  name            String
+  status          BudgetStatus      @default(DRAFT)
+  isActive        Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  lockedAt        DateTime?
+  projectId       String
+  createdById     String
+  budget_sections budget_sections[]
+  users           users             @relation(fields: [createdById], references: [id])
+  projects        projects          @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, version])
   @@index([projectId])
   @@index([status])
-  @@map("budgets")
 }
 
-enum BudgetStatus {
-  DRAFT           // Work in progress
-  PENDING_REVIEW  // Submitted for internal review
-  CLIENT_REVIEW   // Sent to client
-  APPROVED        // Client approved (locked)
-  REVISED         // Superseded by new version
+model call_sheet_locations {
+  id           String       @id
+  locationType LocationType @default(SHOOT)
+  callTime     DateTime?
+  notes        String?
+  callSheetId  String
+  locationId   String
+  call_sheets  call_sheets  @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+  locations    locations    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([callSheetId, locationId])
 }
 
-model BudgetSection {
-  id        String @id @default(cuid())
-  code      String // "A", "B", "C", "D", etc.
-  name      String // "Pre-Production & Wrap Labor", "Shooting Labor", etc.
-  sortOrder Int    // Display order
+model call_sheet_rsvps {
+  id                   String       @id
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime
+  status               RSVPStatus   @default(PENDING)
+  sentAt               DateTime?
+  viewedAt             DateTime?
+  confirmedAt          DateTime?
+  personalizedCallTime DateTime?
+  personalizedNotes    String?
+  callSheetId          String
+  projectCrewId        String
+  call_sheets          call_sheets  @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+  project_crew         project_crew @relation(fields: [projectCrewId], references: [id], onDelete: Cascade)
 
-  // Section type determines calculation behavior
-  sectionType BudgetSectionType @default(LABOR)
+  @@unique([callSheetId, projectCrewId])
+  @@index([callSheetId])
+  @@index([projectCrewId])
+  @@index([status])
+}
 
-  // Relations
-  budgetId String
-  budget   Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+model call_sheets {
+  id                   String                 @id
+  dayNumber            Int
+  shootDate            DateTime
+  status               CallSheetStatus        @default(DRAFT)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  generalCrewCall      DateTime?
+  firstShot            DateTime?
+  estimatedWrap        DateTime?
+  weatherHigh          String?
+  weatherLow           String?
+  weatherSummary       String?
+  sunrise              String?
+  sunset               String?
+  nearestHospital      String?
+  hospitalAddress      String?
+  emergencyContact     String?
+  emergencyPhone       String?
+  notes                String?
+  projectId            String
+  call_sheet_locations call_sheet_locations[]
+  call_sheet_rsvps     call_sheet_rsvps[]
+  projects             projects               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  schedule_events      schedule_events[]
 
-  lines   BudgetLine[]
-  fringes BudgetFringe[]
+  @@unique([projectId, dayNumber])
+  @@index([projectId])
+  @@index([shootDate])
+}
 
-  @@unique([budgetId, code])
-  @@index([budgetId])
-  @@map("budget_sections")
+model crew_members {
+  id             String         @id
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  state          String?
+  zip            String?
+  department     Department?
+  primaryRole    String?
+  defaultRate    Decimal?       @db.Decimal(12, 2)
+  unionStatus    UnionStatus    @default(NON_UNION)
+  unionLocal     String?
+  loanOutCompany String?
+  w9OnFile       Boolean        @default(false)
+  skills         String[]
+  notes          String?
+  isActive       Boolean        @default(true)
+  organizationId String
+  organizations  organizations  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project_crew   project_crew[]
+
+  @@index([department])
+  @@index([lastName, firstName])
+  @@index([organizationId])
+}
+
+model locations {
+  id                   String                 @id
+  name                 String
+  address              String?
+  city                 String?
+  state                String?
+  zip                  String?
+  latitude             Decimal?               @db.Decimal(10, 8)
+  longitude            Decimal?               @db.Decimal(11, 8)
+  mapLink              String?
+  contactName          String?
+  contactPhone         String?
+  contactEmail         String?
+  parkingNotes         String?
+  parkingAddress       String?
+  loadingNotes         String?
+  accessNotes          String?
+  arrivalInstructions  String?
+  notes                String?
+  projectId            String
+  call_sheet_locations call_sheet_locations[]
+  projects             projects               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model organizations {
+  id                     String         @id
+  name                   String
+  slug                   String         @unique
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime
+  defaultInsuranceRate   Decimal        @default(0.03) @db.Decimal(5, 4)
+  defaultPayrollTaxRate  Decimal        @default(0.23) @db.Decimal(5, 4)
+  defaultWorkersCompRate Decimal        @default(0.02) @db.Decimal(5, 4)
+  defaultAgencyFeeRate   Decimal        @default(0.17) @db.Decimal(5, 4)
+  crew_members           crew_members[]
+  projects               projects[]
+  users                  users[]
+  vendors                vendors[]
+}
+
+model project_crew {
+  id                  String             @id
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime
+  role                String
+  department          Department
+  dealRate            Decimal            @db.Decimal(12, 2)
+  dealType            DealType           @default(DAY_RATE)
+  guaranteedDays      Decimal?           @db.Decimal(10, 2)
+  kitFee              Decimal?           @db.Decimal(12, 2)
+  perDiem             Decimal?           @db.Decimal(10, 2)
+  status              CrewStatus         @default(HOLD)
+  dealMemoSigned      Boolean            @default(false)
+  startDate           DateTime?
+  endDate             DateTime?
+  dietaryRestrictions String?
+  shirtSize           String?
+  vehicleInfo         String?
+  notes               String?
+  projectId           String
+  crewMemberId        String?
+  budgetLineId        String?
+  call_sheet_rsvps    call_sheet_rsvps[]
+  budget_lines        budget_lines?      @relation(fields: [budgetLineId], references: [id])
+  crew_members        crew_members?      @relation(fields: [crewMemberId], references: [id])
+  projects            projects           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  timecards           timecards[]
+
+  @@index([budgetLineId])
+  @@index([crewMemberId])
+  @@index([department])
+  @@index([projectId])
+}
+
+model projects {
+  id              String            @id
+  status          ProjectStatus     @default(ACTIVE)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  jobNumber       String
+  jobName         String
+  client          String
+  agency          String?
+  brand           String?
+  bidDate         DateTime?
+  awardDate       DateTime?
+  prepStartDate   DateTime?
+  shootStartDate  DateTime?
+  shootEndDate    DateTime?
+  wrapDate        DateTime?
+  insuranceRate   Decimal?          @db.Decimal(5, 4)
+  payrollTaxRate  Decimal?          @db.Decimal(5, 4)
+  workersCompRate Decimal?          @db.Decimal(5, 4)
+  agencyFeeRate   Decimal?          @db.Decimal(5, 4)
+  organizationId  String
+  budgets         budgets[]
+  call_sheets     call_sheets[]
+  locations       locations[]
+  project_crew    project_crew[]
+  organizations   organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchase_orders purchase_orders[]
+
+  @@unique([organizationId, jobNumber])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model purchase_orders {
+  id                                        String        @id
+  poNumber                                  String
+  status                                    POStatus      @default(DRAFT)
+  createdAt                                 DateTime      @default(now())
+  updatedAt                                 DateTime
+  description                               String
+  amount                                    Decimal       @db.Decimal(14, 2)
+  taxAmount                                 Decimal       @default(0) @db.Decimal(14, 2)
+  totalAmount                               Decimal       @db.Decimal(14, 2)
+  issueDate                                 DateTime?
+  dueDate                                   DateTime?
+  paidDate                                  DateTime?
+  invoiceNumber                             String?
+  paymentMethod                             String?
+  paymentRef                                String?
+  notes                                     String?
+  projectId                                 String
+  vendorId                                  String?
+  budgetLineId                              String?
+  createdById                               String
+  approvedById                              String?
+  approvedAt                                DateTime?
+  users_purchase_orders_approvedByIdTousers users?        @relation("purchase_orders_approvedByIdTousers", fields: [approvedById], references: [id])
+  budget_lines                              budget_lines? @relation(fields: [budgetLineId], references: [id])
+  users_purchase_orders_createdByIdTousers  users         @relation("purchase_orders_createdByIdTousers", fields: [createdById], references: [id])
+  projects                                  projects      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendors                                   vendors?      @relation(fields: [vendorId], references: [id])
+
+  @@unique([projectId, poNumber])
+  @@index([budgetLineId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model schedule_events {
+  id          String            @id
+  sortOrder   Int
+  time        DateTime
+  endTime     DateTime?
+  description String
+  scene       String?
+  location    String?
+  notes       String?
+  eventType   ScheduleEventType @default(GENERAL)
+  callSheetId String
+  call_sheets call_sheets       @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
+
+  @@index([callSheetId])
+  @@index([time])
+}
+
+model timecards {
+  id            String         @id
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime
+  workDate      DateTime
+  callTime      DateTime?
+  wrapTime      DateTime?
+  regularHours  Decimal        @default(0) @db.Decimal(5, 2)
+  ot15Hours     Decimal        @default(0) @db.Decimal(5, 2)
+  ot20Hours     Decimal        @default(0) @db.Decimal(5, 2)
+  mealPenalty   Decimal        @default(0) @db.Decimal(10, 2)
+  regularAmount Decimal        @default(0) @db.Decimal(12, 2)
+  ot15Amount    Decimal        @default(0) @db.Decimal(12, 2)
+  ot20Amount    Decimal        @default(0) @db.Decimal(12, 2)
+  totalAmount   Decimal        @default(0) @db.Decimal(12, 2)
+  status        TimecardStatus @default(DRAFT)
+  notes         String?
+  projectCrewId String
+  submittedById String?
+  submittedAt   DateTime?
+  project_crew  project_crew   @relation(fields: [projectCrewId], references: [id], onDelete: Cascade)
+  users         users?         @relation(fields: [submittedById], references: [id])
+
+  @@index([projectCrewId])
+  @@index([status])
+  @@index([workDate])
+}
+
+model users {
+  id                                                  String            @id
+  email                                               String            @unique
+  name                                                String
+  hashedPassword                                      String?
+  role                                                UserRole          @default(CREW)
+  createdAt                                           DateTime          @default(now())
+  updatedAt                                           DateTime
+  organizationId                                      String
+  budgets                                             budgets[]
+  purchase_orders_purchase_orders_approvedByIdTousers purchase_orders[] @relation("purchase_orders_approvedByIdTousers")
+  purchase_orders_purchase_orders_createdByIdTousers  purchase_orders[] @relation("purchase_orders_createdByIdTousers")
+  timecards                                           timecards[]
+  organizations                                       organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model vendors {
+  id              String            @id
+  name            String
+  contactName     String?
+  email           String?
+  phone           String?
+  address         String?
+  taxId           String?
+  w9OnFile        Boolean           @default(false)
+  notes           String?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  organizationId  String
+  purchase_orders purchase_orders[]
+  organizations   organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 enum BudgetSectionType {
-  LABOR      // Subject to P&W, Workers Comp
-  EXPENSES   // Equipment, materials (may have markup)
-  TALENT     // Talent fees (different tax treatment)
-  PRODUCTION // Production fee, markup
-  INSURANCE  // Insurance section
+  LABOR
+  EXPENSES
+  TALENT
+  PRODUCTION
+  INSURANCE
 }
 
-model BudgetLine {
-  id          String @id @default(cuid())
-  lineNumber  Int    // AICP line number (e.g., 16 for Gaffer)
-  description String // "Gaffer", "Camera Rental", etc.
-  sortOrder   Int    // Display order within section
-
-  // Estimation fields
-  quantity    Decimal @default(1) @db.Decimal(10, 2) // # of people/items
-  rate        Decimal @default(0) @db.Decimal(12, 2) // Day rate or unit cost
-  days        Decimal @default(1) @db.Decimal(10, 2) // # of days
-
-  // Overtime (labor lines only)
-  ot15Hours   Decimal @default(0) @db.Decimal(10, 2) // Hours at 1.5x
-  ot20Hours   Decimal @default(0) @db.Decimal(10, 2) // Hours at 2.0x
-
-  // Calculated subtotal (stored for performance, recalculated on save)
-  // Formula: (qty * rate * days) + (qty * (rate/8) * ot15Hours * 1.5) + (qty * (rate/8) * ot20Hours * 2.0)
-  estimatedTotal Decimal @default(0) @db.Decimal(14, 2)
-
-  // Notes and flags
-  notes       String?
-  isContracted Boolean @default(false) // Locked rate from deal memo
-
-  // Relations
-  sectionId String
-  section   BudgetSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-
-  // Actuals linking
-  projectCrew    ProjectCrew[]   // Who is assigned to this line
-  purchaseOrders PurchaseOrder[] // POs against this line
-
-  @@unique([sectionId, lineNumber])
-  @@index([sectionId])
-  @@map("budget_lines")
+enum BudgetStatus {
+  DRAFT
+  PENDING_REVIEW
+  CLIENT_REVIEW
+  APPROVED
+  REVISED
 }
 
-model BudgetFringe {
-  id        String     @id @default(cuid())
-  name      String     // "Payroll Tax & P&W", "Workers Comp", "Agency Fee"
-  fringeType FringeType
-  rate      Decimal    @db.Decimal(5, 4) // Percentage as decimal (0.23 = 23%)
-  isActive  Boolean    @default(true)
-
-  // Relations
-  sectionId String
-  section   BudgetSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-
-  @@index([sectionId])
-  @@map("budget_fringes")
+enum CallSheetStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  DISTRIBUTED
 }
 
-enum FringeType {
-  PAYROLL_TAX    // P&W (Pension & Welfare)
-  WORKERS_COMP   // Workers Compensation
-  INSURANCE      // Production Insurance
-  AGENCY_FEE     // Agency markup
-  CUSTOM         // Other markups
+enum CrewStatus {
+  HOLD
+  CONFIRMED
+  CANCELLED
+  WRAPPED
 }
 
-// =============================================================================
-// SECTION 4: CREW MANAGEMENT (Directory vs. Project Instance)
-// =============================================================================
-
-// The "Rolodex" - Organization's master crew database
-model CrewMember {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Contact info
-  firstName   String
-  lastName    String
-  email       String?
-  phone       String?
-  address     String?
-  city        String?
-  state       String?
-  zip         String?
-
-  // Professional info
-  department    Department?
-  primaryRole   String?       // Default role (can vary per project)
-  defaultRate   Decimal?      @db.Decimal(12, 2) // Their standard day rate
-  unionStatus   UnionStatus   @default(NON_UNION)
-  unionLocal    String?       // e.g., "IATSE Local 600"
-
-  // Legal/Tax
-  loanOutCompany String?      // If they bill through an LLC
-  w9OnFile       Boolean      @default(false)
-
-  // Skills and notes
-  skills    String[]        // Array of skills/specialties
-  notes     String?
-  isActive  Boolean         @default(true)
-
-  // Relations
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  projectAssignments ProjectCrew[]
-
-  @@index([organizationId])
-  @@index([department])
-  @@index([lastName, firstName])
-  @@map("crew_members")
+enum DealType {
+  DAY_RATE
+  WEEKLY_RATE
+  FLAT_FEE
+  HOURLY
 }
 
 enum Department {
@@ -312,6 +452,73 @@ enum Department {
   OTHER
 }
 
+enum FringeType {
+  PAYROLL_TAX
+  WORKERS_COMP
+  INSURANCE
+  AGENCY_FEE
+  CUSTOM
+}
+
+enum LocationType {
+  SHOOT
+  BASECAMP
+  CREW_PARKING
+  TRUCK_PARKING
+  CATERING
+  HOLDING
+  HOSPITAL
+  HOTEL
+  OTHER
+}
+
+enum POStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  ISSUED
+  RECEIVED
+  INVOICED
+  PAID
+  CANCELLED
+}
+
+enum ProjectStatus {
+  BID
+  AWARDED
+  ACTIVE
+  WRAPPED
+  CLOSED
+  CANCELLED
+}
+
+enum RSVPStatus {
+  PENDING
+  SENT
+  VIEWED
+  CONFIRMED
+  DECLINED
+}
+
+enum ScheduleEventType {
+  CREW_CALL
+  TALENT_CALL
+  MEAL
+  SHOOT
+  COMPANY_MOVE
+  WRAP
+  GENERAL
+}
+
+enum TimecardStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PROCESSED
+  PAID
+}
+
 enum UnionStatus {
   NON_UNION
   IATSE
@@ -322,413 +529,9 @@ enum UnionStatus {
   OTHER_UNION
 }
 
-// Project-specific crew assignment (the "hire")
-model ProjectCrew {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Role on THIS project (may differ from their default)
-  role       String
-  department Department
-
-  // Deal terms for THIS project
-  dealRate      Decimal  @db.Decimal(12, 2) // Negotiated rate
-  dealType      DealType @default(DAY_RATE)
-  guaranteedDays Decimal? @db.Decimal(10, 2) // Minimum days guaranteed
-  kitFee        Decimal? @db.Decimal(12, 2) // Equipment kit rental
-  perDiem       Decimal? @db.Decimal(10, 2) // Daily allowance
-
-  // Status
-  status        CrewStatus @default(HOLD)
-  dealMemoSigned Boolean   @default(false)
-  startDate     DateTime?
-  endDate       DateTime?
-
-  // Logistics (for Call Sheet)
-  dietaryRestrictions String?  // Vegetarian, Vegan, Allergies, etc.
-  shirtSize           String?  // S, M, L, XL, XXL
-  vehicleInfo         String?  // For parking coordination
-
-  notes String?
-
-  // Relations
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // Link to master crew record (optional - can hire non-rostered crew)
-  crewMemberId String?
-  crewMember   CrewMember? @relation(fields: [crewMemberId], references: [id], onDelete: SetNull)
-
-  // CRUCIAL: Link to budget line for cost tracking
-  budgetLineId String?
-  budgetLine   BudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
-
-  // Actuals
-  timecards Timecard[]
-
-  // Daily confirmations
-  rsvps CallSheetRSVP[]
-
-  @@index([projectId])
-  @@index([crewMemberId])
-  @@index([budgetLineId])
-  @@index([department])
-  @@map("project_crew")
-}
-
-enum DealType {
-  DAY_RATE
-  WEEKLY_RATE
-  FLAT_FEE
-  HOURLY
-}
-
-enum CrewStatus {
-  HOLD        // Penciled in, not confirmed
-  CONFIRMED   // Booked
-  CANCELLED   // Was booked, now cancelled
-  WRAPPED     // Completed their work
-}
-
-// =============================================================================
-// SECTION 5: ACTUALIZATION (Financial Feedback Loop)
-// =============================================================================
-
-// Vendor master list
-model Vendor {
-  id        String   @id @default(cuid())
-  name      String
-  contactName String?
-  email     String?
-  phone     String?
-  address   String?
-  taxId     String?  // For 1099 purposes
-  w9OnFile  Boolean  @default(false)
-  notes     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  purchaseOrders PurchaseOrder[]
-
-  @@index([organizationId])
-  @@map("vendors")
-}
-
-model PurchaseOrder {
-  id        String   @id @default(cuid())
-  poNumber  String   // Auto-generated: "2024-NIKE-001-PO-001"
-  status    POStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // PO details
-  description String
-  amount      Decimal  @db.Decimal(14, 2)
-  taxAmount   Decimal  @default(0) @db.Decimal(14, 2)
-  totalAmount Decimal  @db.Decimal(14, 2) // amount + tax
-
-  // Dates
-  issueDate   DateTime?
-  dueDate     DateTime?
-  paidDate    DateTime?
-
-  // Payment tracking
-  invoiceNumber String?
-  paymentMethod String? // Check, Wire, CC, etc.
-  paymentRef    String? // Check number, transaction ID
-
-  notes String?
-
-  // Relations
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  vendorId String?
-  vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-
-  // CRUCIAL: Link to budget line for variance tracking
-  budgetLineId String?
-  budgetLine   BudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
-
-  // Audit
-  createdById String
-  createdBy   User   @relation("POCreator", fields: [createdById], references: [id])
-
-  approvedById String?
-  approvedBy   User?   @relation("POApprover", fields: [approvedById], references: [id])
-  approvedAt   DateTime?
-
-  @@unique([projectId, poNumber])
-  @@index([projectId])
-  @@index([budgetLineId])
-  @@index([status])
-  @@map("purchase_orders")
-}
-
-enum POStatus {
-  DRAFT       // Not yet submitted
-  PENDING     // Awaiting approval
-  APPROVED    // Approved, ready to issue
-  ISSUED      // Sent to vendor
-  RECEIVED    // Goods/services received
-  INVOICED    // Invoice received from vendor
-  PAID        // Payment completed
-  CANCELLED   // Cancelled
-}
-
-model Timecard {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Work period
-  workDate    DateTime
-  callTime    DateTime? // When they started
-  wrapTime    DateTime? // When they finished
-
-  // Hours breakdown
-  regularHours Decimal @default(0) @db.Decimal(5, 2) // First 8-10 hours
-  ot15Hours    Decimal @default(0) @db.Decimal(5, 2) // 1.5x overtime
-  ot20Hours    Decimal @default(0) @db.Decimal(5, 2) // 2.0x overtime
-  mealPenalty  Decimal @default(0) @db.Decimal(10, 2) // Meal penalty amount
-
-  // Calculated amounts (stored for performance)
-  regularAmount Decimal @default(0) @db.Decimal(12, 2)
-  ot15Amount    Decimal @default(0) @db.Decimal(12, 2)
-  ot20Amount    Decimal @default(0) @db.Decimal(12, 2)
-  totalAmount   Decimal @default(0) @db.Decimal(12, 2)
-
-  // Status
-  status TimecardStatus @default(DRAFT)
-  notes  String?
-
-  // Relations
-  projectCrewId String
-  projectCrew   ProjectCrew @relation(fields: [projectCrewId], references: [id], onDelete: Cascade)
-
-  submittedById String?
-  submittedBy   User?    @relation("TimecardSubmitter", fields: [submittedById], references: [id])
-  submittedAt   DateTime?
-
-  @@index([projectCrewId])
-  @@index([workDate])
-  @@index([status])
-  @@map("timecards")
-}
-
-enum TimecardStatus {
-  DRAFT      // Not submitted
-  SUBMITTED  // Awaiting approval
-  APPROVED   // Approved for payroll
-  REJECTED   // Needs correction
-  PROCESSED  // Sent to payroll
-  PAID       // Payment complete
-}
-
-// =============================================================================
-// SECTION 6: CALL SHEETS & LOGISTICS
-// =============================================================================
-
-model CallSheet {
-  id        String   @id @default(cuid())
-  dayNumber Int      // Day 1, Day 2, etc.
-  shootDate DateTime
-  status    CallSheetStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Times
-  generalCrewCall DateTime?
-  firstShot       DateTime?
-  estimatedWrap   DateTime?
-
-  // Weather (can be auto-fetched)
-  weatherHigh    String?
-  weatherLow     String?
-  weatherSummary String?
-  sunrise        String?
-  sunset         String?
-
-  // Safety
-  nearestHospital     String?
-  hospitalAddress     String?
-  emergencyContact    String?
-  emergencyPhone      String?
-
-  notes String?
-
-  // Relations
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // Locations for this shoot day
-  callSheetLocations CallSheetLocation[]
-
-  // Daily schedule timeline
-  scheduleEvents ScheduleEvent[]
-
-  // Crew confirmations for this day
-  rsvps CallSheetRSVP[]
-
-  @@unique([projectId, dayNumber])
-  @@index([projectId])
-  @@index([shootDate])
-  @@map("call_sheets")
-}
-
-enum CallSheetStatus {
-  DRAFT
-  REVIEW
-  APPROVED
-  DISTRIBUTED
-}
-
-model Location {
-  id        String   @id @default(cuid())
-  name      String   // "Main Location", "Basecamp", etc.
-  address   String?
-  city      String?
-  state     String?
-  zip       String?
-
-  // Geocoding
-  latitude  Decimal? @db.Decimal(10, 8)
-  longitude Decimal? @db.Decimal(11, 8)
-  mapLink   String?  // Google Maps URL
-
-  // Contacts
-  contactName  String?
-  contactPhone String?
-  contactEmail String?
-
-  // Logistics
-  parkingNotes   String?
-  parkingAddress String?
-  loadingNotes   String?
-  accessNotes    String?
-  arrivalInstructions String? // "Enter through back gate, code 1234"
-
-  notes String?
-
-  // Relations
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  callSheetLocations CallSheetLocation[]
-
-  @@index([projectId])
-  @@map("locations")
-}
-
-// Junction table for locations on specific call sheets
-model CallSheetLocation {
-  id String @id @default(cuid())
-
-  locationType LocationType @default(SHOOT)
-  callTime     DateTime?    // Specific call time for this location
-  notes        String?
-
-  callSheetId String
-  callSheet   CallSheet @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
-
-  locationId String
-  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-
-  @@unique([callSheetId, locationId])
-  @@map("call_sheet_locations")
-}
-
-enum LocationType {
-  SHOOT          // Main shooting location
-  BASECAMP       // Crew staging area
-  CREW_PARKING   // Crew parking lot
-  TRUCK_PARKING  // Production truck parking
-  CATERING       // Meal location
-  HOLDING        // Talent holding
-  HOSPITAL       // Nearest hospital (safety)
-  HOTEL          // Crew accommodation
-  OTHER
-}
-
-// =============================================================================
-// SECTION 7: SCHEDULE & RSVP (Phase 1 - Call Sheet Automation)
-// =============================================================================
-
-// Daily timeline of events for a call sheet
-model ScheduleEvent {
-  id        String   @id @default(cuid())
-  sortOrder Int      // Display order in timeline
-  time      DateTime // When this event occurs
-  endTime   DateTime? // Optional end time for duration events
-
-  // Event details
-  description String  // "Crew Call", "Lunch", "Company Move", etc.
-  scene       String? // Scene number if applicable (e.g., "Scene 12A")
-  location    String? // Quick location reference (or use CallSheetLocation)
-  notes       String?
-
-  // Event type for styling/categorization
-  eventType ScheduleEventType @default(GENERAL)
-
-  // Relations
-  callSheetId String
-  callSheet   CallSheet @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
-
-  @@index([callSheetId])
-  @@index([time])
-  @@map("schedule_events")
-}
-
-enum ScheduleEventType {
-  CREW_CALL     // General crew call time
-  TALENT_CALL   // Talent/cast arrival
-  MEAL          // Breakfast, Lunch, Dinner
-  SHOOT         // Active shooting block
-  COMPANY_MOVE  // Moving to different location
-  WRAP          // End of day
-  GENERAL       // Other events
-}
-
-// Per-day crew confirmation tracking
-model CallSheetRSVP {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Status tracking
-  status        RSVPStatus @default(PENDING)
-  sentAt        DateTime?  // When call sheet was sent to this person
-  viewedAt      DateTime?  // When they first opened it
-  confirmedAt   DateTime?  // When they confirmed
-
-  // Personalized call time (overrides general crew call)
-  personalizedCallTime DateTime?
-  personalizedNotes    String?   // "Report to Basecamp first"
-
-  // Relations
-  callSheetId String
-  callSheet   CallSheet @relation(fields: [callSheetId], references: [id], onDelete: Cascade)
-
-  projectCrewId String
-  projectCrew   ProjectCrew @relation(fields: [projectCrewId], references: [id], onDelete: Cascade)
-
-  @@unique([callSheetId, projectCrewId]) // One RSVP per crew member per day
-  @@index([callSheetId])
-  @@index([projectCrewId])
-  @@index([status])
-  @@map("call_sheet_rsvps")
-}
-
-enum RSVPStatus {
-  PENDING     // Not yet sent
-  SENT        // Call sheet distributed
-  VIEWED      // Crew member opened it
-  CONFIRMED   // Crew member confirmed attendance
-  DECLINED    // Crew member cannot attend
+enum UserRole {
+  ADMIN
+  PRODUCER
+  COORDINATOR
+  CREW
 }
