@@ -65,3 +65,4 @@ Thumbs.db
 
 # Frontend source (Lovable repo clone)
 frontend_source/
+node_modules
