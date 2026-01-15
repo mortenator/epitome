@@ -145,15 +145,27 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             sunset = ''
             if sunrise_raw:
                 try:
-                    sunrise_dt = datetime.fromisoformat(sunrise_raw)
-                    sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
-                except:
+                    # Handle ISO format like "2026-01-18T08:58" or "2026-01-18T08:58:00"
+                    if 'T' in sunrise_raw:
+                        # Parse ISO format
+                        sunrise_dt = datetime.fromisoformat(sunrise_raw.replace('Z', '+00:00'))
+                        sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
+                    else:
+                        sunrise = sunrise_raw
+                except Exception as e:
+                    print(f"Warning: Failed to parse sunrise '{sunrise_raw}': {e}")
                     sunrise = sunrise_raw
             if sunset_raw:
                 try:
-                    sunset_dt = datetime.fromisoformat(sunset_raw)
-                    sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
-                except:
+                    # Handle ISO format like "2026-01-18T15:55" or "2026-01-18T15:55:00"
+                    if 'T' in sunset_raw:
+                        # Parse ISO format
+                        sunset_dt = datetime.fromisoformat(sunset_raw.replace('Z', '+00:00'))
+                        sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
+                    else:
+                        sunset = sunset_raw
+                except Exception as e:
+                    print(f"Warning: Failed to parse sunset '{sunset_raw}': {e}")
                     sunset = sunset_raw
 
             temp_high = daily.get('temperature_2m_max', [None])[0]
@@ -419,6 +431,9 @@ def enrich_production_data(
                     result = future.result()
                     if result:
                         weather_results[date] = result
+                        print(f"[WEATHER DEBUG] Fetched weather for {date}: {result.get('temperature', {}).get('high', 'N/A')}°F high, {result.get('temperature', {}).get('low', 'N/A')}°F low, sunrise: {result.get('sunrise', 'N/A')}, sunset: {result.get('sunset', 'N/A')}")
+                    else:
+                        print(f"[WEATHER DEBUG] No weather data returned for {date}")
                 except Exception as e:
                     print(f"Warning: Weather fetch for {date} failed: {e}")
 

@@ -14,15 +14,23 @@ try:
 except ImportError:
     pass  # python-dotenv not installed, continue without it
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.progress import ProgressEvent, progress_manager
+from api.database import get_db, AsyncSessionLocal
+from api.services import (
+    create_project_from_generation,
+    get_project_for_frontend,
+    update_crew_rsvp,
+    search_crew_members,
+)
 from agents.production_workbook_generator import run_tool
 
 # Directory setup
@@ -96,35 +104,73 @@ async def generate_workbook(
     file_content = None
     if file:
         content = await file.read()
+        filename_lower = file.filename.lower()
+
         # Handle different file types
-        if file.filename.endswith('.csv') or file.filename.endswith('.txt'):
+        if filename_lower.endswith('.csv') or filename_lower.endswith('.txt'):
             file_content = content.decode('utf-8', errors='ignore')
-        elif file.filename.endswith('.pdf'):
-            # Properly extract text from PDF
+
+        elif filename_lower.endswith('.pdf'):
+            # Extract text from PDF
             try:
                 import io
                 import PyPDF2
-                
+
                 pdf_file = io.BytesIO(content)
                 pdf_reader = PyPDF2.PdfReader(pdf_file)
-                
+
                 # Extract text from all pages
                 extracted_text = []
                 for page_num, page in enumerate(pdf_reader.pages, 1):
                     page_text = page.extract_text()
                     if page_text.strip():
                         extracted_text.append(f"--- Page {page_num} ---\n{page_text}")
-                
+
                 if extracted_text:
                     file_content = f"[PDF file: {file.filename}]\n\n" + "\n\n".join(extracted_text)
                 else:
                     file_content = f"[PDF file: {file.filename} - No extractable text found]"
-                    
+
             except Exception as e:
-                # Fallback if PDF parsing fails
                 file_content = f"[PDF file: {file.filename} - Error extracting text: {str(e)}]"
+
+        elif filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls'):
+            # Extract text from Excel files
+            try:
+                import io
+                import openpyxl
+
+                excel_file = io.BytesIO(content)
+                workbook = openpyxl.load_workbook(excel_file, data_only=True)
+
+                extracted_sheets = []
+                for sheet_name in workbook.sheetnames:
+                    sheet = workbook[sheet_name]
+                    sheet_rows = []
+
+                    for row in sheet.iter_rows(values_only=True):
+                        # Filter out empty rows
+                        row_values = [str(cell) if cell is not None else "" for cell in row]
+                        if any(v.strip() for v in row_values):
+                            sheet_rows.append(" | ".join(row_values))
+
+                    if sheet_rows:
+                        extracted_sheets.append(f"--- Sheet: {sheet_name} ---\n" + "\n".join(sheet_rows))
+
+                if extracted_sheets:
+                    file_content = f"[Excel file: {file.filename}]\n\n" + "\n\n".join(extracted_sheets)
+                else:
+                    file_content = f"[Excel file: {file.filename} - No data found]"
+
+            except Exception as e:
+                file_content = f"[Excel file: {file.filename} - Error extracting data: {str(e)}]"
+
         else:
-            file_content = content.decode('utf-8', errors='ignore')
+            # Try to decode as text for other file types
+            try:
+                file_content = content.decode('utf-8', errors='ignore')
+            except Exception:
+                file_content = f"[File: {file.filename} - Could not read content]"
 
     # Run generation in background
     asyncio.create_task(
@@ -170,12 +216,32 @@ async def run_generation_task(
         result['workbook_path'] = str(new_path)
         result['download_filename'] = new_filename
 
+        # Save to database
+        project_id = None
+        try:
+            enriched_data = result.get('data', {})
+            # Debug: Log the data being saved
+            print(f"[DB DEBUG] Saving to database...")
+            print(f"[DB DEBUG] production_info: {enriched_data.get('production_info', {})}")
+            print(f"[DB DEBUG] crew_list count: {len(enriched_data.get('crew_list', []))}")
+            if enriched_data.get('crew_list'):
+                print(f"[DB DEBUG] First crew member: {enriched_data['crew_list'][0]}")
+            print(f"[DB DEBUG] schedule_days: {enriched_data.get('schedule_days', [])}")
+
+            async with AsyncSessionLocal() as db:
+                project_id = await create_project_from_generation(db, enriched_data)
+                result['project_id'] = project_id
+                print(f"[DB DEBUG] Project saved with ID: {project_id}")
+        except Exception as db_error:
+            # Log but don't fail - workbook was still generated
+            print(f"Warning: Database save failed: {db_error}")
+
         progress_manager.set_result(job_id, result)
 
-        # Send download ready event
+        # Send download ready event with project_id
         download_event = ProgressEvent(
             "download_ready", 100,
-            json.dumps({"filename": new_filename})
+            json.dumps({"filename": new_filename, "project_id": project_id})
         )
         queue = progress_manager.get_queue(job_id)
         if queue:
@@ -269,8 +335,59 @@ async def get_result(job_id: str):
         "status": "error" if "error" in result else "complete",
         "data": result.get("data"),
         "download_filename": result.get("download_filename"),
+        "project_id": result.get("project_id"),
         "error": result.get("error")
     }
+
+
+@app.get("/api/project/{project_id}")
+async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get project data formatted for the frontend.
+
+    Returns departments[], callSheets[], locations, and project info
+    matching the frontend's TypeScript interfaces.
+    """
+    data = await get_project_for_frontend(db, project_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return data
+
+
+@app.patch("/api/crew/{crew_id}")
+async def update_crew_member(
+    crew_id: str,
+    callTime: Optional[str] = Query(None, description="New call time (e.g., '7:00 AM')"),
+    location: Optional[str] = Query(None, description="New location (e.g., 'Set', 'Basecamp')"),
+    callSheetId: Optional[str] = Query(None, description="Specific call sheet ID to update"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update a crew member's call time or location for a call sheet.
+
+    If callSheetId is provided, updates that specific day.
+    Otherwise, updates the first available RSVP.
+    """
+    success = await update_crew_rsvp(db, crew_id, callTime, location, callSheetId)
+    if not success:
+        raise HTTPException(status_code=404, detail="Crew member not found")
+
+    return {"status": "updated", "crew_id": crew_id}
+
+
+@app.get("/api/crew/search")
+async def search_crew(
+    q: str = Query("", description="Search query (name or role)"),
+    department: Optional[str] = Query(None, description="Filter by department"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Search available crew members from the organization's database.
+
+    Used by the AddCrewDropdown component to find crew to add to a project.
+    """
+    crew = await search_crew_members(db, query=q, department=department)
+    return {"crew": crew}
 
 
 @app.get("/health")

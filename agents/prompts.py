@@ -73,8 +73,13 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
    - Shooting dates, call times, schedule information
    - Location names, addresses, parking information
    - Any other production details mentioned in the file
-2. **Standard Roles:** Always include keys for 'Director', 'Producer', '1st AD', 'Director of Photography', 'Gaffer', 'Key Grip', 'HMU', 'Wardrobe' in the crew list. If names are found in the file, use them. Only use null if the information is truly not present.
-3. **Dates:** If "next Monday" is said, calculate the date relative to today. If dates are in the attached file, use those exact dates.
-4. **Defaults:** If no attached file is present, return the template structure with "TBD" values so the user gets a usable blank template.
-5. **Data Quality:** Do not leave fields as null or "TBD" if the information exists in the attached file. Extract it accurately.
+2. **Location Extraction:** CRITICAL - If the user mentions a location in their prompt (e.g., "Oslo Norway", "Los Angeles", "New York", "shoot in London"), you MUST extract it and put it in the "address" field of at least one location. Do NOT use "TBD" for the address if a location is mentioned. Examples:
+   - Prompt: "shoot in Oslo Norway" → address: "Oslo, Norway"
+   - Prompt: "3 day shoot in Los Angeles" → address: "Los Angeles, CA" or "Los Angeles"
+   - Prompt: "production in New York" → address: "New York, NY" or "New York"
+   - If multiple locations mentioned, use the primary/main location for the first location entry
+3. **Standard Roles:** Always include keys for 'Director', 'Producer', '1st AD', 'Director of Photography', 'Gaffer', 'Key Grip', 'HMU', 'Wardrobe' in the crew list. If names are found in the file, use them. Only use null if the information is truly not present.
+4. **Dates:** If "next Monday" is said, calculate the date relative to today. If dates are in the attached file, use those exact dates.
+5. **Defaults:** If no attached file is present, return the template structure with "TBD" values so the user gets a usable blank template.
+6. **Data Quality:** Do not leave fields as null or "TBD" if the information exists in the attached file or user prompt. Extract it accurately.
 """

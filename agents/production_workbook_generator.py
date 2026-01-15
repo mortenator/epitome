@@ -2065,13 +2065,39 @@ def run_tool(
     emit("extracting_data", 65, "Received response from AI, parsing...")
 
     emit("extracting_data", 60, "Parsing extracted data...")
-    
-    # Extract JSON from response
-    response_text = response.text
-    
+
+    # Extract JSON from response - handle various response scenarios
+    try:
+        response_text = response.text
+    except Exception as text_error:
+        # Some responses may not have a .text property
+        print(f"[ERROR] Could not get response.text: {text_error}")
+        # Try to get text from candidates
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    response_text = candidate.content.parts[0].text
+                else:
+                    raise ValueError(f"No text in response content: {candidate.content}")
+            else:
+                raise ValueError(f"No content in response candidate: {candidate}")
+        else:
+            raise ValueError(f"Could not extract text from response: {response}")
+
+    # Check if response is empty
+    if not response_text or not response_text.strip():
+        print(f"[ERROR] Empty response from Gemini API")
+        print(f"[DEBUG] Full response object: {response}")
+        if hasattr(response, 'candidates'):
+            print(f"[DEBUG] Candidates: {response.candidates}")
+        if hasattr(response, 'prompt_feedback'):
+            print(f"[DEBUG] Prompt feedback: {response.prompt_feedback}")
+        raise ValueError("Gemini API returned an empty response. Please try again.")
+
     # Debug: Log the response (first 500 chars)
     print(f"\n[DEBUG] Gemini response (first 500 chars): {response_text[:500]}")
-    
+
     try:
         extracted_data = _extract_json_from_response(response_text)
         print(f"[DEBUG] Extracted data keys: {list(extracted_data.keys())}")

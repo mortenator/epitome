@@ -22,3 +22,10 @@ python-multipart>=0.0.6
 
 # PDF parsing
 PyPDF2>=3.0.0
+
+# Excel file parsing
+openpyxl>=3.1.0
+
+# Database (Supabase/PostgreSQL)
+asyncpg>=0.29.0
+sqlalchemy[asyncio]>=2.0.0
