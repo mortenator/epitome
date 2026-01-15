@@ -213,6 +213,7 @@ model organizations {
   projects               projects[]
   users                  users[]
   vendors                vendors[]
+  clients                clients[]
 }
 
 model project_crew {
@@ -257,6 +258,7 @@ model projects {
   jobNumber       String
   jobName         String
   client          String
+  clientId        String?
   agency          String?
   brand           String?
   bidDate         DateTime?
@@ -276,10 +278,12 @@ model projects {
   project_crew    project_crew[]
   organizations   organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   purchase_orders purchase_orders[]
+  clients         clients?          @relation(fields: [clientId], references: [id])
 
   @@unique([organizationId, jobNumber])
   @@index([organizationId])
   @@index([status])
+  @@index([clientId])
 }
 
 model purchase_orders {
@@ -397,6 +401,28 @@ model vendors {
   purchase_orders purchase_orders[]
   organizations   organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
+}
+
+model clients {
+  id            String    @id
+  name          String
+  contactName   String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  state         String?
+  zip           String?
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+  organizationId String
+  organizations organizations @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects      projects[]
+
+  @@unique([organizationId, name])
   @@index([organizationId])
 }
 

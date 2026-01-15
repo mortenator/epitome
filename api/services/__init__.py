@@ -4,6 +4,9 @@ from .project_service import (
     get_project_for_frontend,
     update_crew_rsvp,
     search_crew_members,
+    update_call_sheet,
+    update_project,
+    update_location,
 )
 
 __all__ = [
@@ -11,4 +14,7 @@ __all__ = [
     "get_project_for_frontend",
     "update_crew_rsvp",
     "search_crew_members",
+    "update_call_sheet",
+    "update_project",
+    "update_location",
 ]

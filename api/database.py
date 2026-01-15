@@ -141,6 +141,7 @@ class Organization(Base):
     # Relationships
     projects: Mapped[list["Project"]] = relationship(back_populates="organization")
     crew_members: Mapped[list["CrewMember"]] = relationship(back_populates="organization")
+    clients: Mapped[list["Client"]] = relationship(back_populates="organization")
 
 
 class Project(Base):
@@ -153,7 +154,8 @@ class Project(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     jobNumber: Mapped[str] = mapped_column(String, nullable=False)
     jobName: Mapped[str] = mapped_column(String, nullable=False)
-    client: Mapped[str] = mapped_column(String, nullable=False)
+    client: Mapped[str] = mapped_column(String, nullable=False)  # Legacy field for backward compatibility
+    clientId: Mapped[str | None] = mapped_column(String, ForeignKey("clients.id"), nullable=True)
     agency: Mapped[str | None] = mapped_column(String, nullable=True)
     brand: Mapped[str | None] = mapped_column(String, nullable=True)
     bidDate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -166,6 +168,7 @@ class Project(Base):
 
     # Relationships
     organization: Mapped["Organization"] = relationship(back_populates="projects")
+    client_relation: Mapped["Client | None"] = relationship("Client", foreign_keys=[clientId])
     call_sheets: Mapped[list["CallSheet"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     project_crew: Mapped[list["ProjectCrew"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     locations: Mapped[list["Location"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -314,6 +317,30 @@ class ScheduleEvent(Base):
 
     # Relationships
     call_sheet: Mapped["CallSheet"] = relationship(back_populates="schedule_events")
+
+
+class Client(Base):
+    """Client organization."""
+    __tablename__ = "clients"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_cuid)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    contactName: Mapped[str | None] = mapped_column(String, nullable=True)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String, nullable=True)
+    address: Mapped[str | None] = mapped_column(String, nullable=True)
+    city: Mapped[str | None] = mapped_column(String, nullable=True)
+    state: Mapped[str | None] = mapped_column(String, nullable=True)
+    zip: Mapped[str | None] = mapped_column(String, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    isActive: Mapped[bool] = mapped_column(Boolean, default=True)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    organizationId: Mapped[str] = mapped_column(String, ForeignKey("organizations.id"), nullable=False)
+
+    # Relationships
+    organization: Mapped["Organization"] = relationship(back_populates="clients")
+    projects: Mapped[list["Project"]] = relationship(back_populates="client_relation")
 
 
 # =============================================================================

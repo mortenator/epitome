@@ -31,13 +31,6 @@ _weather_cache = {}  # (lat, lng, date) -> weather dict
 _logo_cache = {}     # company_name -> logo_url
 
 
-def clear_weather_cache():
-    """Clear the weather cache. Useful for debugging or forcing fresh data."""
-    global _weather_cache
-    _weather_cache = {}
-    print("[WEATHER DEBUG] Weather cache cleared")
-
-
 def get_location_coordinates(address: str) -> Optional[dict]:
     """
     Get GPS coordinates for an address using Google Maps Geocoding API.
@@ -86,66 +79,6 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     return None
 
 
-def find_nearest_hospital(lat: float, lng: float) -> Optional[dict]:
-    """
-    Find the nearest hospital to a location using Google Places API (Nearby Search).
-    
-    Args:
-        lat: Latitude
-        lng: Longitude
-    
-    Returns:
-        Dict with name and address, or None if failed
-    """
-    if not GOOGLE_MAPS_API_KEY:
-        return None  # API key not configured
-    
-    try:
-        params = urllib.parse.urlencode({
-            'location': f'{lat},{lng}',
-            'radius': 10000,  # 10km radius
-            'type': 'hospital',
-            'key': GOOGLE_MAPS_API_KEY
-        })
-        url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?{params}"
-        
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read().decode())
-        
-        if data.get('status') == 'OK' and data.get('results'):
-            # Get the first (nearest) hospital
-            hospital = data['results'][0]
-            name = hospital.get('name', 'Nearest Hospital')
-            address = hospital.get('vicinity', '')
-            
-            # Try to get full address from place details if available
-            place_id = hospital.get('place_id')
-            if place_id:
-                try:
-                    details_params = urllib.parse.urlencode({
-                        'place_id': place_id,
-                        'fields': 'formatted_address',
-                        'key': GOOGLE_MAPS_API_KEY
-                    })
-                    details_url = f"https://maps.googleapis.com/maps/api/place/details/json?{details_params}"
-                    
-                    with urllib.request.urlopen(details_url, timeout=10) as details_response:
-                        details_data = json.loads(details_response.read().decode())
-                        if details_data.get('status') == 'OK' and details_data.get('result'):
-                            address = details_data['result'].get('formatted_address', address)
-                except Exception:
-                    pass  # Use vicinity if details fail
-            
-            return {
-                'name': name,
-                'address': address
-            }
-    except Exception as e:
-        print(f"Warning: Failed to find nearest hospital: {e}")
-    
-    return None
-
-
 def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     """
     Get weather data for a location and date using Open-Meteo API (free, no key needed).
@@ -161,11 +94,7 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     # Check cache first (round coords to 2 decimals for cache key)
     cache_key = (round(lat, 2), round(lng, 2), date)
     if cache_key in _weather_cache:
-        cached = _weather_cache[cache_key]
-        print(f"[WEATHER DEBUG] Using cached weather for ({lat:.2f}, {lng:.2f}) on {date}: {cached.get('temperature', {}).get('high', 'N/A')}°F")
-        return cached
-    
-    print(f"[WEATHER DEBUG] Fetching fresh weather for ({lat:.2f}, {lng:.2f}) on {date}...")
+        return _weather_cache[cache_key]
 
     try:
         # Parse the date
@@ -175,38 +104,25 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
 
         # Open-Meteo only provides forecast up to 16 days ahead
         days_ahead = (target_date - today).days
-        
-        # Check if date is in the past (more than 1 day ago)
-        if days_ahead < -1:
-            print(f"[WEATHER DEBUG] WARNING: Date {date} is in the past ({days_ahead} days ago). Open-Meteo forecast API only works for future dates. Using historical API...")
-            # Use historical API for past dates
-            params = urllib.parse.urlencode({
-                'latitude': lat,
-                'longitude': lng,
-                'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
-                'temperature_unit': 'fahrenheit',
-                'windspeed_unit': 'mph',
-                'timezone': 'auto',
-                'start_date': date,
-                'end_date': date
-            })
-            url = f"https://api.open-meteo.com/v1/forecast?{params}"
-        elif days_ahead > 16:
-            print(f"[WEATHER DEBUG] WARNING: Date {date} is more than 16 days in the future. Open-Meteo forecast API only supports up to 16 days ahead.")
+
+        # For dates beyond 16 days, we can't get accurate weather forecasts
+        # Return None to indicate weather data is not available
+        if days_ahead > 16:
+            print(f"Warning: Date {date} is more than 16 days in the future. Weather forecasts not available.")
             return None
-        else:
-            # Use forecast API for future dates (up to 16 days)
-            params = urllib.parse.urlencode({
-                'latitude': lat,
-                'longitude': lng,
-                'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
-                'temperature_unit': 'fahrenheit',
-                'windspeed_unit': 'mph',
-                'timezone': 'auto',
-                'start_date': date,
-                'end_date': date
-            })
-            url = f"https://api.open-meteo.com/v1/forecast?{params}"
+
+        # Use forecast API (works for past dates and future dates up to 16 days)
+        params = urllib.parse.urlencode({
+            'latitude': lat,
+            'longitude': lng,
+            'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
+            'temperature_unit': 'fahrenheit',
+            'windspeed_unit': 'mph',
+            'timezone': 'auto',
+            'start_date': date,
+            'end_date': date
+        })
+        url = f"https://api.open-meteo.com/v1/forecast?{params}"
 
         with urllib.request.urlopen(url, timeout=10) as response:
             data = json.loads(response.read().decode())
@@ -237,27 +153,15 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             sunset = ''
             if sunrise_raw:
                 try:
-                    # Handle ISO format like "2026-01-18T08:58" or "2026-01-18T08:58:00"
-                    if 'T' in sunrise_raw:
-                        # Parse ISO format
-                        sunrise_dt = datetime.fromisoformat(sunrise_raw.replace('Z', '+00:00'))
-                        sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
-                    else:
-                        sunrise = sunrise_raw
-                except Exception as e:
-                    print(f"Warning: Failed to parse sunrise '{sunrise_raw}': {e}")
+                    sunrise_dt = datetime.fromisoformat(sunrise_raw)
+                    sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
+                except:
                     sunrise = sunrise_raw
             if sunset_raw:
                 try:
-                    # Handle ISO format like "2026-01-18T15:55" or "2026-01-18T15:55:00"
-                    if 'T' in sunset_raw:
-                        # Parse ISO format
-                        sunset_dt = datetime.fromisoformat(sunset_raw.replace('Z', '+00:00'))
-                        sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
-                    else:
-                        sunset = sunset_raw
-                except Exception as e:
-                    print(f"Warning: Failed to parse sunset '{sunset_raw}': {e}")
+                    sunset_dt = datetime.fromisoformat(sunset_raw)
+                    sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
+                except:
                     sunset = sunset_raw
 
             temp_high = daily.get('temperature_2m_max', [None])[0]
@@ -277,7 +181,6 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             }
             # Cache the result
             _weather_cache[cache_key] = weather_result
-            print(f"[WEATHER DEBUG] Fetched and cached weather: {weather_result.get('temperature', {}).get('high', 'N/A')}°F high, {weather_result.get('temperature', {}).get('low', 'N/A')}°F low, sunrise: {weather_result.get('sunrise', 'N/A')}, sunset: {weather_result.get('sunset', 'N/A')}")
             return weather_result
     except Exception as e:
         print(f"Warning: Failed to get weather data: {e}")
@@ -409,8 +312,7 @@ def get_client_research(client_name: str) -> Optional[dict]:
 
 def enrich_production_data(
     extracted_data: dict,
-    progress_callback: Optional[Callable[[str, int, str], None]] = None,
-    clear_cache: bool = False
+    progress_callback: Optional[Callable[[str, int, str], None]] = None
 ) -> dict:
     """
     Enrich extracted production data with information from external APIs.
@@ -419,13 +321,10 @@ def enrich_production_data(
     Args:
         extracted_data: Production data extracted from LLM
         progress_callback: Optional callback for progress updates (stage_id, percent, message)
-        clear_cache: If True, clear weather cache before fetching (useful for debugging)
 
     Returns:
         Enriched data with coordinates, weather, logos, and research
     """
-    if clear_cache:
-        clear_weather_cache()
     def emit(stage_id: str, percent: int, message: str):
         """Emit progress update."""
         if progress_callback:
@@ -498,35 +397,38 @@ def enrich_production_data(
         }
         locations[i]['formatted_address'] = coords['formatted_address']
 
-    # Get primary coordinates for weather and hospital lookup
+    # Get primary coordinates for weather
     primary_coords = None
     for loc in locations:
         if loc.get('coordinates'):
             primary_coords = loc['coordinates']
-            print(f"[WEATHER DEBUG] Using location '{loc.get('name', 'Unknown')}' at ({primary_coords['lat']:.4f}, {primary_coords['lng']:.4f}) for weather")
             break
-    
+
+    # Debug: Log if coordinates were found
     if not primary_coords:
-        print(f"[WEATHER DEBUG] WARNING: No coordinates found for any location. Locations: {[loc.get('name', 'Unknown') for loc in locations]}")
-    
-    # Find nearest hospital if we have coordinates and hospital is TBD
-    if primary_coords:
-        hospital = logistics.get("hospital", {})
-        if not hospital.get("address") or hospital.get("address", "").upper() == "TBD":
-            emit("hospital", 65, "Finding nearest hospital...")
-            hospital_info = find_nearest_hospital(primary_coords['lat'], primary_coords['lng'])
-            if hospital_info:
-                enriched['logistics']['hospital'] = hospital_info
-                print(f"[ENRICHMENT DEBUG] Found nearest hospital: {hospital_info.get('name')} at {hospital_info.get('address')}")
-            else:
-                print(f"[ENRICHMENT DEBUG] Could not find nearest hospital")
+        print(f"Warning: No coordinates found for locations. Weather data will not be fetched.")
+        print(f"Locations: {[(l.get('name'), l.get('address')) for l in locations]}")
 
     # PARALLEL WEATHER: Fetch weather for all schedule days at once
     if primary_coords and schedule_days:
         emit("weather", 70, "Fetching weather data...")
 
-        dates_to_fetch = [day.get('date') for day in schedule_days if day.get('date')]
-        print(f"[WEATHER DEBUG] Fetching weather for dates: {dates_to_fetch} at coordinates ({primary_coords['lat']:.4f}, {primary_coords['lng']:.4f})")
+        # Filter and validate dates - only include properly formatted YYYY-MM-DD dates
+        def is_valid_date(date_str: str) -> bool:
+            """Check if date string is in YYYY-MM-DD format."""
+            if not date_str or date_str.upper() == 'TBD':
+                return False
+            try:
+                datetime.strptime(date_str, '%Y-%m-%d')
+                return True
+            except (ValueError, TypeError):
+                return False
+
+        dates_to_fetch = [
+            day.get('date') 
+            for day in schedule_days 
+            if day.get('date') and is_valid_date(day.get('date'))
+        ]
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             weather_futures = {
@@ -545,9 +447,6 @@ def enrich_production_data(
                     result = future.result()
                     if result:
                         weather_results[date] = result
-                        print(f"[WEATHER DEBUG] Fetched weather for {date}: {result.get('temperature', {}).get('high', 'N/A')}°F high, {result.get('temperature', {}).get('low', 'N/A')}°F low, sunrise: {result.get('sunrise', 'N/A')}, sunset: {result.get('sunset', 'N/A')}")
-                    else:
-                        print(f"[WEATHER DEBUG] No weather data returned for {date}")
                 except Exception as e:
                     print(f"Warning: Weather fetch for {date} failed: {e}")
 

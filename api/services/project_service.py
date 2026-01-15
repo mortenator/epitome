@@ -2,20 +2,26 @@
 Project service for database operations.
 Handles saving and retrieving project data for the frontend.
 """
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from sqlalchemy.orm import selectinload
 from dateutil import parser as date_parser
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.database import (
-    Project, CallSheet, ProjectCrew, CallSheetRsvp,
-    Location, ScheduleEvent, Organization, CrewMember
+    CallSheet,
+    CallSheetRsvp,
+    Client,
+    CrewMember,
+    Location,
+    Organization,
+    Project,
+    ProjectCrew,
+    ScheduleEvent,
 )
-
 
 # =============================================================================
 # Department Mapping
@@ -177,6 +183,46 @@ async def ensure_default_organization(db: AsyncSession) -> str:
     return org.id
 
 
+async def get_or_create_client(
+    db: AsyncSession,
+    client_name: str,
+    organization_id: str
+) -> Optional[str]:
+    """
+    Get existing client by name or create a new one.
+    
+    Returns:
+        Client ID, or None if client_name is empty/TBD
+    """
+    if not client_name or client_name == "TBD":
+        return None
+    
+    # Check for existing client
+    result = await db.execute(
+        select(Client).where(
+            Client.name == client_name,
+            Client.organizationId == organization_id
+        )
+    )
+    existing_client = result.scalar_one_or_none()
+    
+    if existing_client:
+        return existing_client.id
+    
+    # Create new client
+    client_id = str(uuid.uuid4())
+    client = Client(
+        id=client_id,
+        name=client_name,
+        organizationId=organization_id,
+        updatedAt=datetime.utcnow(),
+    )
+    db.add(client)
+    await db.flush()
+    
+    return client_id
+
+
 async def create_project_from_generation(
     db: AsyncSession,
     enriched_data: dict,
@@ -200,6 +246,10 @@ async def create_project_from_generation(
     prod_info = enriched_data.get("production_info", {})
     logistics = enriched_data.get("logistics", {})
 
+    # Get or create client
+    client_name = prod_info.get("client", "TBD")
+    client_id = await get_or_create_client(db, client_name, organization_id)
+
     # Get or create Project (handle duplicate job numbers)
     job_number = prod_info.get("job_number") or f"EP-{datetime.now().strftime('%Y%m%d-%H%M')}"
     
@@ -216,7 +266,8 @@ async def create_project_from_generation(
         # Update existing project
         project_id = existing_project.id
         existing_project.jobName = prod_info.get("job_name", existing_project.jobName)
-        existing_project.client = prod_info.get("client", existing_project.client)
+        existing_project.client = client_name  # Keep legacy field for backward compatibility
+        existing_project.clientId = client_id  # Set new clientId field
         existing_project.agency = prod_info.get("agency") or existing_project.agency
         existing_project.brand = prod_info.get("brand") or existing_project.brand
         existing_project.updatedAt = datetime.utcnow()
@@ -229,7 +280,8 @@ async def create_project_from_generation(
             id=project_id,
             jobNumber=job_number,
             jobName=prod_info.get("job_name", "Untitled Project"),
-            client=prod_info.get("client", "TBD"),
+            client=client_name,  # Keep legacy field for backward compatibility
+            clientId=client_id,  # Set new clientId field
             agency=prod_info.get("agency"),
             brand=prod_info.get("brand"),
             organizationId=organization_id,
@@ -360,22 +412,57 @@ async def create_project_from_generation(
             first_name = name_parts[0] if name_parts else ""
             last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        # Create CrewMember record if we have a name
+        # Get or create CrewMember record (with deduplication by email/phone)
         crew_member_id = None
         if first_name:  # Only create if we have at least a first name
-            crew_member_id = str(uuid.uuid4())
-            crew_member = CrewMember(
-                id=crew_member_id,
-                firstName=first_name,
-                lastName=last_name or "",
-                email=crew_data.get("email"),
-                phone=crew_data.get("phone"),
-                department=department,
-                primaryRole=crew_data.get("role"),
-                organizationId=organization_id,
-                updatedAt=datetime.utcnow(),
-            )
-            db.add(crew_member)
+            email = crew_data.get("email")
+            phone = crew_data.get("phone")
+            
+            # Check for existing crew member by email or phone
+            existing_crew = None
+            if email:
+                result = await db.execute(
+                    select(CrewMember).where(
+                        CrewMember.email == email,
+                        CrewMember.organizationId == organization_id
+                    )
+                )
+                existing_crew = result.scalar_one_or_none()
+            
+            if not existing_crew and phone:
+                result = await db.execute(
+                    select(CrewMember).where(
+                        CrewMember.phone == phone,
+                        CrewMember.organizationId == organization_id
+                    )
+                )
+                existing_crew = result.scalar_one_or_none()
+            
+            if existing_crew:
+                # Merge: update existing record with new data
+                existing_crew.firstName = first_name or existing_crew.firstName
+                existing_crew.lastName = last_name or existing_crew.lastName
+                existing_crew.email = email or existing_crew.email
+                existing_crew.phone = phone or existing_crew.phone
+                existing_crew.department = department or existing_crew.department
+                existing_crew.primaryRole = crew_data.get("role") or existing_crew.primaryRole
+                existing_crew.updatedAt = datetime.utcnow()
+                crew_member_id = existing_crew.id
+            else:
+                # Create new crew member
+                crew_member_id = str(uuid.uuid4())
+                crew_member = CrewMember(
+                    id=crew_member_id,
+                    firstName=first_name,
+                    lastName=last_name or "",
+                    email=email,
+                    phone=phone,
+                    department=department,
+                    primaryRole=crew_data.get("role"),
+                    organizationId=organization_id,
+                    updatedAt=datetime.utcnow(),
+                )
+                db.add(crew_member)
 
         # Create ProjectCrew entry
         project_crew_id = str(uuid.uuid4())
@@ -419,9 +506,11 @@ async def get_project_for_frontend(
 
     Returns data matching the frontend's Department[] and ProductionInfo interfaces.
     """
-    # Fetch project
+    # Fetch project with client relation
     result = await db.execute(
-        select(Project).where(Project.id == project_id)
+        select(Project)
+        .where(Project.id == project_id)
+        .options(selectinload(Project.client_relation))
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -506,12 +595,15 @@ async def get_project_for_frontend(
     ]
     departments.sort(key=lambda d: dept_order.index(d["name"]) if d["name"] in dept_order else 999)
 
+    # Get client name from relation if available, otherwise fall back to legacy field
+    client_name = project.client_relation.name if project.client_relation else project.client
+    
     return {
         "project": {
             "id": project.id,
             "jobName": project.jobName,
             "jobNumber": project.jobNumber,
-            "client": project.client,
+            "client": client_name,
             "agency": project.agency,
         },
         "callSheets": [
@@ -722,6 +814,7 @@ async def search_crew_members(
     Used by the AddCrewDropdown component.
     """
     from sqlalchemy import or_
+
     from api.database import CrewMember
 
     stmt = select(CrewMember)
