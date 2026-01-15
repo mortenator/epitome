@@ -86,6 +86,66 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     return None
 
 
+def find_nearest_hospital(lat: float, lng: float) -> Optional[dict]:
+    """
+    Find the nearest hospital to a location using Google Places API (Nearby Search).
+    
+    Args:
+        lat: Latitude
+        lng: Longitude
+    
+    Returns:
+        Dict with name and address, or None if failed
+    """
+    if not GOOGLE_MAPS_API_KEY:
+        return None  # API key not configured
+    
+    try:
+        params = urllib.parse.urlencode({
+            'location': f'{lat},{lng}',
+            'radius': 10000,  # 10km radius
+            'type': 'hospital',
+            'key': GOOGLE_MAPS_API_KEY
+        })
+        url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?{params}"
+        
+        with urllib.request.urlopen(url, timeout=10) as response:
+            data = json.loads(response.read().decode())
+        
+        if data.get('status') == 'OK' and data.get('results'):
+            # Get the first (nearest) hospital
+            hospital = data['results'][0]
+            name = hospital.get('name', 'Nearest Hospital')
+            address = hospital.get('vicinity', '')
+            
+            # Try to get full address from place details if available
+            place_id = hospital.get('place_id')
+            if place_id:
+                try:
+                    details_params = urllib.parse.urlencode({
+                        'place_id': place_id,
+                        'fields': 'formatted_address',
+                        'key': GOOGLE_MAPS_API_KEY
+                    })
+                    details_url = f"https://maps.googleapis.com/maps/api/place/details/json?{details_params}"
+                    
+                    with urllib.request.urlopen(details_url, timeout=10) as details_response:
+                        details_data = json.loads(details_response.read().decode())
+                        if details_data.get('status') == 'OK' and details_data.get('result'):
+                            address = details_data['result'].get('formatted_address', address)
+                except Exception:
+                    pass  # Use vicinity if details fail
+            
+            return {
+                'name': name,
+                'address': address
+            }
+    except Exception as e:
+        print(f"Warning: Failed to find nearest hospital: {e}")
+    
+    return None
+
+
 def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     """
     Get weather data for a location and date using Open-Meteo API (free, no key needed).
@@ -438,7 +498,7 @@ def enrich_production_data(
         }
         locations[i]['formatted_address'] = coords['formatted_address']
 
-    # Get primary coordinates for weather
+    # Get primary coordinates for weather and hospital lookup
     primary_coords = None
     for loc in locations:
         if loc.get('coordinates'):
@@ -448,6 +508,18 @@ def enrich_production_data(
     
     if not primary_coords:
         print(f"[WEATHER DEBUG] WARNING: No coordinates found for any location. Locations: {[loc.get('name', 'Unknown') for loc in locations]}")
+    
+    # Find nearest hospital if we have coordinates and hospital is TBD
+    if primary_coords:
+        hospital = logistics.get("hospital", {})
+        if not hospital.get("address") or hospital.get("address", "").upper() == "TBD":
+            emit("hospital", 65, "Finding nearest hospital...")
+            hospital_info = find_nearest_hospital(primary_coords['lat'], primary_coords['lng'])
+            if hospital_info:
+                enriched['logistics']['hospital'] = hospital_info
+                print(f"[ENRICHMENT DEBUG] Found nearest hospital: {hospital_info.get('name')} at {hospital_info.get('address')}")
+            else:
+                print(f"[ENRICHMENT DEBUG] Could not find nearest hospital")
 
     # PARALLEL WEATHER: Fetch weather for all schedule days at once
     if primary_coords and schedule_days:

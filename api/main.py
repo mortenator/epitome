@@ -30,6 +30,9 @@ from api.services import (
     get_project_for_frontend,
     update_crew_rsvp,
     search_crew_members,
+    update_call_sheet,
+    update_project,
+    update_location,
 )
 from agents.production_workbook_generator import run_tool
 
@@ -388,6 +391,180 @@ async def search_crew(
     """
     crew = await search_crew_members(db, query=q, department=department)
     return {"crew": crew}
+
+
+@app.patch("/api/call-sheet/{call_sheet_id}")
+async def update_call_sheet_endpoint(
+    call_sheet_id: str,
+    dayName: Optional[str] = Query(None, description="Day name (e.g., 'Day 1: EPITOME SAMPLE')"),
+    shootDate: Optional[str] = Query(None, description="Shoot date (YYYY-MM-DD)"),
+    generalCrewCall: Optional[str] = Query(None, description="General crew call time (e.g., '7:45 AM')"),
+    hospitalName: Optional[str] = Query(None, description="Hospital name"),
+    hospitalAddress: Optional[str] = Query(None, description="Hospital address"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update call sheet fields.
+    """
+    success = await update_call_sheet(
+        db,
+        call_sheet_id,
+        day_name=dayName,
+        shoot_date=shootDate,
+        general_crew_call=generalCrewCall,
+        hospital_name=hospitalName,
+        hospital_address=hospitalAddress
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Call sheet not found")
+    
+    return {"status": "updated", "call_sheet_id": call_sheet_id}
+
+
+@app.patch("/api/project/{project_id}")
+async def update_project_endpoint(
+    project_id: str,
+    jobName: Optional[str] = Query(None, description="Job name"),
+    client: Optional[str] = Query(None, description="Client name"),
+    agency: Optional[str] = Query(None, description="Agency name"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update project fields.
+    """
+    success = await update_project(
+        db,
+        project_id,
+        job_name=jobName,
+        client=client,
+        agency=agency
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    return {"status": "updated", "project_id": project_id}
+
+
+@app.patch("/api/location/{location_id}")
+async def update_location_endpoint(
+    location_id: str,
+    address: Optional[str] = Query(None, description="Location address"),
+    name: Optional[str] = Query(None, description="Location name"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update location fields.
+    """
+    success = await update_location(
+        db,
+        location_id,
+        address=address,
+        name=name
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    return {"status": "updated", "location_id": location_id}
+
+
+@app.post("/api/hospital/nearby")
+async def find_nearby_hospital(
+    lat: float = Query(..., description="Latitude"),
+    lng: float = Query(..., description="Longitude")
+):
+    """
+    Find the nearest hospital to given coordinates.
+    """
+    from agents.enrichment import find_nearest_hospital
+    
+    hospital = find_nearest_hospital(lat, lng)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="No hospital found")
+    
+    return hospital
+
+
+@app.post("/api/regenerate/{project_id}")
+async def regenerate_workbook(
+    project_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Regenerate Excel workbook from current project data in database.
+    
+    Fetches all project data, converts to enriched_data format,
+    and generates a new workbook.
+    """
+    from api.services import get_project_for_frontend
+    from agents.production_workbook_generator import EpitomeWorkbookGenerator
+    from datetime import datetime
+    import json
+    
+    # Fetch current project data
+    project_data = await get_project_for_frontend(db, project_id)
+    if not project_data:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Convert project_data to enriched_data format for workbook generator
+    enriched_data = {
+        "production_info": {
+            "job_name": project_data["project"]["jobName"],
+            "client": project_data["project"]["client"],
+            "production_company": "Epitome",
+            "job_number": project_data["project"]["jobNumber"],
+        },
+        "logistics": {
+            "locations": [
+                {
+                    "name": loc["name"],
+                    "address": loc.get("address", ""),
+                    "parking": loc.get("parkingNotes", "TBD"),
+                }
+                for loc in project_data.get("locations", [])
+            ],
+            "hospital": project_data.get("callSheets", [{}])[0].get("hospital", {}),
+            "weather": project_data.get("callSheets", [{}])[0].get("weather", {}),
+        },
+        "schedule_days": [
+            {
+                "day_number": cs["dayNumber"],
+                "date": cs["shootDate"][:10] if cs.get("shootDate") else None,
+                "crew_call": cs.get("generalCrewCall", "7:00 AM"),
+                "talent_call": "9:00 AM",
+                "shoot_call": "8:00 AM",
+                "weather": cs.get("weather", {}),
+            }
+            for cs in project_data.get("callSheets", [])
+        ],
+        "crew_list": [
+            {
+                "department": dept["name"],
+                "role": member["role"],
+                "name": member.get("name", ""),
+                "email": member.get("email", ""),
+                "phone": member.get("phone", ""),
+                "rate": "TBD",
+                "call_time": member.get("callTime", ""),
+                "location": member.get("location", ""),
+            }
+            for dept in project_data.get("departments", [])
+            for member in dept.get("crew", [])
+        ],
+    }
+    
+    # Generate workbook
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"Epitome_Workbook_{project_id[:8]}_{timestamp}.xlsx"
+    output_path = OUTPUT_DIR / filename
+    
+    generator = EpitomeWorkbookGenerator(data=enriched_data)
+    generator.generate(str(output_path))
+    
+    return {
+        "status": "regenerated",
+        "filename": filename,
+        "project_id": project_id,
+    }
 
 
 @app.get("/health")

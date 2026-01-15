@@ -584,6 +584,132 @@ async def update_crew_rsvp(
     return True
 
 
+async def update_call_sheet(
+    db: AsyncSession,
+    call_sheet_id: str,
+    day_name: Optional[str] = None,
+    shoot_date: Optional[str] = None,
+    general_crew_call: Optional[str] = None,
+    hospital_name: Optional[str] = None,
+    hospital_address: Optional[str] = None
+) -> bool:
+    """
+    Update call sheet fields.
+    
+    Args:
+        call_sheet_id: ID of the call sheet to update
+        day_name: Optional new day name (not stored directly, but can be used for notes)
+        shoot_date: Optional new shoot date (YYYY-MM-DD format)
+        general_crew_call: Optional new general crew call time (e.g., "7:45 AM")
+        hospital_name: Optional new hospital name
+        hospital_address: Optional new hospital address
+    """
+    result = await db.execute(
+        select(CallSheet).where(CallSheet.id == call_sheet_id)
+    )
+    call_sheet = result.scalar_one_or_none()
+    
+    if not call_sheet:
+        return False
+    
+    if shoot_date is not None:
+        call_sheet.shootDate = parse_date(shoot_date) or call_sheet.shootDate
+    
+    if general_crew_call is not None:
+        call_sheet.generalCrewCall = parse_time(general_crew_call, call_sheet.shootDate)
+    
+    if hospital_name is not None:
+        call_sheet.nearestHospital = hospital_name
+    
+    if hospital_address is not None:
+        call_sheet.hospitalAddress = hospital_address
+    
+    call_sheet.updatedAt = datetime.utcnow()
+    
+    await db.commit()
+    return True
+
+
+async def update_project(
+    db: AsyncSession,
+    project_id: str,
+    job_name: Optional[str] = None,
+    client: Optional[str] = None,
+    agency: Optional[str] = None
+) -> bool:
+    """
+    Update project fields.
+    
+    Args:
+        project_id: ID of the project to update
+        job_name: Optional new job name
+        client: Optional new client name
+        agency: Optional new agency name
+    """
+    result = await db.execute(
+        select(Project).where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        return False
+    
+    if job_name is not None:
+        project.jobName = job_name
+    
+    if client is not None:
+        project.client = client
+    
+    if agency is not None:
+        project.agency = agency
+    
+    project.updatedAt = datetime.utcnow()
+    
+    await db.commit()
+    return True
+
+
+async def update_location(
+    db: AsyncSession,
+    location_id: str,
+    address: Optional[str] = None,
+    name: Optional[str] = None
+) -> bool:
+    """
+    Update location fields.
+    
+    Args:
+        location_id: ID of the location to update
+        address: Optional new address
+        name: Optional new location name
+    """
+    result = await db.execute(
+        select(Location).where(Location.id == location_id)
+    )
+    location = result.scalar_one_or_none()
+    
+    if not location:
+        return False
+    
+    if address is not None:
+        location.address = address
+        # Re-geocode the address if we have Google Maps API key
+        from agents.enrichment import get_location_coordinates
+        coords = get_location_coordinates(address)
+        if coords:
+            location.latitude = coords['lat']
+            location.longitude = coords['lng']
+            location.mapLink = f"https://www.google.com/maps/search/?api=1&query={coords['lat']},{coords['lng']}"
+    
+    if name is not None:
+        location.name = name
+    
+    # Note: updatedAt is handled by SQLAlchemy's onupdate
+    
+    await db.commit()
+    return True
+
+
 async def search_crew_members(
     db: AsyncSession,
     query: str = "",
