@@ -25,11 +25,13 @@ This document outlines best-in-class practices for working with Claude on code p
 
 | Layer | Technology |
 |-------|------------|
-| **Database** | PostgreSQL (Supabase) |
-| **ORM** | Prisma |
+| **Database** | PostgreSQL (Supabase) with Row Level Security |
+| **ORM** | Prisma (migrations) + SQLAlchemy (runtime) |
 | **Backend** | Python (FastAPI) |
-| **AI/LLM** | Google Gemini |
+| **Frontend** | React + TypeScript + Vite + Tailwind CSS |
+| **AI/LLM** | Google Gemini (extraction + chat) |
 | **Excel Generation** | xlsxwriter |
+| **Data Enrichment** | Google Maps API, Open-Meteo API, logo.dev API |
 
 ### System Architecture
 
@@ -38,7 +40,8 @@ The system follows a **Database-First** architecture:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SUPABASE (PostgreSQL)                        │
-│                      21 Tables, 17 Enums                        │
+│                      22 Tables, 17 Enums                        │
+│                    Row Level Security (RLS)                     │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -50,18 +53,33 @@ The system follows a **Database-First** architecture:
           ┌───────────────────┼───────────────────┐
           ▼                   ▼                   ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│   FastAPI        │ │  LLM Extraction  │ │  Excel Generator │
-│   REST API       │ │  (Gemini)        │ │  (xlsxwriter)    │
+│   FastAPI        │ │  LLM Services     │ │  Excel Generator │
+│   REST API       │ │  - Extraction    │ │  (xlsxwriter)    │
+│   - Chat API     │ │  - Chat/Q&A      │ │                  │
+│   - Project API  │ │  - Edit Commands │ │                  │
 └──────────────────┘ └──────────────────┘ └──────────────────┘
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │  Data Enrichment │
+                    │  - Geocoding     │
+                    │  - Weather API   │
+                    │  - Client Research│
+                    └──────────────────┘
 ```
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `prisma/schema.prisma` | Database schema (21 tables) |
+| `prisma/schema.prisma` | Database schema (22 tables) |
 | `agents/production_workbook_generator.py` | Excel workbook generator |
+| `agents/enrichment.py` | Data enrichment (geocoding, weather, logos) |
+| `agents/prompts.py` | LLM system prompts for extraction and chat |
 | `api/main.py` | FastAPI REST endpoints |
+| `api/services/chat_service.py` | Chat functionality with LLM integration |
+| `api/services/project_service.py` | Project CRUD operations |
+| `api/database.py` | SQLAlchemy models |
 | `.env` | Environment variables (DATABASE_URL, API keys) |
 
 ## Database Schema
@@ -71,8 +89,9 @@ The system follows a **Database-First** architecture:
 ```
 Organization (Tenant)
   ├── users (team members)
-  ├── crew_members (rolodex)
+  ├── crew_members (rolodex) [auto-deduplicated by email/phone]
   ├── vendors
+  ├── clients [dedicated client table]
   └── projects
         ├── budgets → budget_sections → budget_lines ← purchase_orders
         │                                     ↑
@@ -82,8 +101,12 @@ Organization (Tenant)
         │                   │
         ├── locations ──────┼──→ call_sheet_locations
         │                   │
-        └── call_sheets ────┘
-              └── schedule_events
+        ├── clients (relation) ────┐
+        │                          │
+        └── call_sheets ────┘      │
+              └── schedule_events  │
+                                   │
+                            (projects.clientId → clients.id)
 ```
 
 ### Tables by Section
@@ -104,10 +127,17 @@ organizationId
 
 **projects** - Central hub
 ```
-id, jobNumber, jobName, client, agency, brand, status,
+id, jobNumber, jobName, client (legacy string), clientId (FK to clients),
+agency, brand, status,
 bidDate, awardDate, prepStartDate, shootStartDate, shootEndDate, wrapDate,
 insuranceRate, payrollTaxRate, workersCompRate, agencyFeeRate,
 organizationId
+```
+
+**clients** - Dedicated client table for reporting and management
+```
+id, name, contactName, email, phone, address, city, state, zip,
+notes, isActive, createdAt, updatedAt, organizationId
 ```
 
 #### 2. Budgeting Engine (AICP/Hot Budget)
@@ -144,6 +174,10 @@ rate, isActive, sectionId
 id, firstName, lastName, email, phone, address, city, state, zip,
 department, primaryRole, defaultRate, unionStatus, unionLocal,
 loanOutCompany, w9OnFile, skills[], notes, isActive, organizationId
+
+Note: Auto-deduplication based on email/phone (unique per organization).
+When creating crew members, system checks for existing records with
+matching email or phone and merges data instead of creating duplicates.
 ```
 
 **project_crew** - Per-project assignments
@@ -239,10 +273,14 @@ NON_UNION, IATSE, TEAMSTERS, SAG_AFTRA, DGA, WGA, OTHER_UNION
 
 | Link | Purpose |
 |------|---------|
+| `projects.clientId` → `clients.id` | Client relationship (new) |
+| `projects.client` | Legacy string field (kept for migration compatibility) |
 | `project_crew.budgetLineId` → `budget_lines` | Labor variance tracking |
 | `purchase_orders.budgetLineId` → `budget_lines` | Expense variance tracking |
 | `call_sheet_rsvps.projectCrewId` → `project_crew` | Per-day crew confirmations |
 | `call_sheet_locations` junction | Link locations to specific shoot days |
+| `crew_members.email` + `organizationId` | Unique constraint (deduplication) |
+| `crew_members.phone` + `organizationId` | Unique constraint (deduplication) |
 
 ### Estimated vs. Actual Query Pattern
 
@@ -271,29 +309,59 @@ const variance = await prisma.budget_lines.findMany({
 ## Working with Claude on Epitome
 
 When asking Claude to work on Epitome code, provide context about:
-- The Prisma schema and table relationships
-- The multi-tenant organization structure
+- The Prisma schema and table relationships (22 tables)
+- The multi-tenant organization structure with RLS policies
 - The Budget Line as the "pivot point" for cost tracking
 - The CallSheet → RSVP → ProjectCrew relationship for logistics
 - The Supabase/PostgreSQL database connection
+- The clients table for client-based reporting
+- Crew member auto-deduplication (email/phone uniqueness)
+- Chat functionality with LLM integration for Q&A and edit commands
+- Data enrichment pipeline (geocoding, weather, client research)
 
 ### Common Tasks
 
 **Adding a new field:**
 1. Update `prisma/schema.prisma`
 2. Run `npx prisma migrate dev --name add_field_name`
-3. Update related TypeScript types and API endpoints
+3. Update related SQLAlchemy models in `api/database.py`
+4. Update API endpoints in `api/main.py` and `api/services/`
+5. Add RLS policies if needed (for Supabase security)
 
 **Creating a new API endpoint:**
-1. Use Prisma client for database access
-2. Follow REST conventions
-3. Include proper error handling
-4. Add input validation
+1. Add route to `api/main.py`
+2. Create service function in `api/services/` if needed
+3. Use SQLAlchemy (AsyncSession) for database access
+4. Follow REST conventions
+5. Include proper error handling and input validation
+6. Add to `api/services/__init__.py` exports
 
 **Generating Excel from database:**
-1. Query Prisma for project data with relations
+1. Query SQLAlchemy for project data with relations
 2. Transform to the generator's expected JSON schema
 3. Call `production_workbook_generator.py`
+
+**Adding chat functionality:**
+1. Chat commands are processed via `api/services/chat_service.py`
+2. LLM prompts are defined in `agents/prompts.py`
+3. Edit commands execute via `project_service` functions
+4. Frontend sends messages to `/api/chat` endpoint
+5. Chat supports both Q&A and edit commands (e.g., "Change crew call to 8am")
+
+**Data enrichment:**
+1. Enrichment happens in `agents/enrichment.py`
+2. Supports geocoding (Google Maps), weather (Open-Meteo), logos (logo.dev)
+3. Runs in parallel for performance
+4. Caches results to avoid duplicate API calls
+5. Weather data requires valid YYYY-MM-DD dates (validated before API calls)
+6. Forecasts limited to 16 days ahead (Open-Meteo limitation)
+
+**Frontend Integration:**
+1. Frontend is in separate repository (`frontend_source/`)
+2. Uses React Query for data fetching (`useProject`, `useGeneration` hooks)
+3. Chat panel component handles form submission and Enter key
+4. Production info cards support inline editing with overflow protection
+5. API client in `frontend_source/src/lib/api.ts` handles all backend communication
 
 ## Prompt Engineering
 
@@ -345,46 +413,76 @@ When asking Claude to review code, request checks for:
 
 ## API Usage Patterns
 
-### Prisma Client Usage
-```typescript
-import { PrismaClient } from '@prisma/client'
+### SQLAlchemy Usage (Backend)
+```python
+from api.database import get_db, Project, Client, CrewMember
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-const prisma = new PrismaClient()
+# Create with relations
+async def create_project(db: AsyncSession, org_id: str):
+    project = Project(
+        id=str(uuid.uuid4()),
+        jobNumber='2024-NIKE-001',
+        jobName='Nike Campaign',
+        client='Nike',  # Legacy field
+        organizationId=org_id,
+        updatedAt=datetime.utcnow()
+    )
+    db.add(project)
+    await db.commit()
+    return project
 
-// Create with relations
-const project = await prisma.projects.create({
-  data: {
-    id: generateCuid(),
-    jobNumber: '2024-NIKE-001',
-    jobName: 'Nike Campaign',
-    client: 'Nike',
-    organizationId: orgId,
-    updatedAt: new Date(),
-    call_sheets: {
-      create: [
-        { id: generateCuid(), dayNumber: 1, shootDate: new Date(), updatedAt: new Date() }
-      ]
-    }
-  },
-  include: { call_sheets: true }
-})
+# Query with relations
+async def get_project(db: AsyncSession, project_id: str):
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .options(
+            selectinload(Project.call_sheets),
+            selectinload(Project.client_relation),  # New clients relation
+            selectinload(Project.project_crew)
+        )
+    )
+    return result.scalar_one_or_none()
 
-// Query with nested relations
-const fullProject = await prisma.projects.findUnique({
-  where: { id: projectId },
-  include: {
-    call_sheets: {
-      include: {
-        schedule_events: { orderBy: { sortOrder: 'asc' } },
-        call_sheet_rsvps: { include: { project_crew: true } },
-        call_sheet_locations: { include: { locations: true } }
-      }
-    },
-    project_crew: { include: { crew_members: true } },
-    budgets: { where: { isActive: true } }
-  }
-})
+# Get or create client (with deduplication)
+async def get_or_create_client(db: AsyncSession, client_name: str, org_id: str):
+    result = await db.execute(
+        select(Client)
+        .where(Client.name == client_name, Client.organizationId == org_id)
+    )
+    client = result.scalar_one_or_none()
+    if not client:
+        client = Client(
+            id=str(uuid.uuid4()),
+            name=client_name,
+            organizationId=org_id,
+            updatedAt=datetime.utcnow()
+        )
+        db.add(client)
+        await db.commit()
+    return client.id
 ```
+
+### API Endpoints
+
+**Project Management:**
+- `GET /api/project/{project_id}` - Get project data for frontend
+- `PATCH /api/project/{project_id}?jobName=...&client=...&agency=...` - Update project
+
+**Chat Functionality:**
+- `POST /api/chat` - Send chat message (FormData: project_id, message)
+  - Returns: `{ type: "answer"|"edit", response: string, action?: string, success?: boolean }`
+
+**Crew Management:**
+- `PATCH /api/crew/{crew_id}?callTime=...&location=...` - Update crew member
+- `GET /api/crew/search?q=...&department=...` - Search crew members
+
+**Generation:**
+- `POST /api/generate` - Start workbook generation (FormData: prompt, file)
+- `GET /api/progress/{job_id}` - SSE stream for progress updates
+- `GET /api/download/{filename}` - Download generated workbook
 
 ## Security Considerations
 
@@ -392,8 +490,47 @@ When working with Claude on code, always:
 - **Review generated code**: Don't blindly trust AI-generated code
 - **Validate inputs**: Ensure proper input validation is in place
 - **Secure credentials**: Never commit API keys or secrets (use `.env`)
-- **Use prepared statements**: Prisma handles this automatically
+- **Use prepared statements**: SQLAlchemy handles this automatically
 - **Implement authorization**: Check user permissions before operations
+- **Row Level Security (RLS)**: All tables should have RLS policies in Supabase
+  - Policies restrict access based on `organizationId`
+  - Service role (used by Prisma/SQLAlchemy) bypasses RLS
+  - Authenticated users can only access their organization's data
+- **Data deduplication**: Crew members are auto-deduplicated to prevent duplicates
+- **Client data**: Use the `clients` table for client management, not the legacy `projects.client` string
+
+## Recent Features (January 2025)
+
+### Chat Functionality
+- **LLM-Powered Chat**: Interactive chat panel for Q&A and edit commands
+- **Edit Commands**: Natural language commands like "Change crew call time to 8am"
+- **Context-Aware**: Chat has access to full project context (crew, locations, call sheets)
+- **Real-time Updates**: Frontend automatically refreshes after successful edits
+
+### Clients Table
+- **Dedicated Client Management**: New `clients` table for better client reporting
+- **Migration**: Existing `projects.client` data automatically migrated
+- **RLS Policies**: Full Row Level Security with organization-based access control
+- **Backward Compatible**: Legacy `projects.client` string field retained
+
+### Crew Member Deduplication
+- **Auto-Deduplication**: Automatic merging of duplicate crew members
+- **Unique Constraints**: Email and phone are unique per organization (partial indexes)
+- **Merge Strategy**: When duplicates found, existing record is updated with new data
+- **Data Cleanup**: Migration handles existing duplicates before applying constraints
+
+### Data Enrichment
+- **Geocoding**: Automatic coordinate lookup for locations (Google Maps API)
+- **Weather Data**: Forecast and historical weather (Open-Meteo API)
+- **Date Validation**: Prevents malformed dates from breaking weather API calls
+- **Parallel Processing**: Multiple API calls run concurrently for performance
+- **Caching**: Results cached to minimize API calls
+
+### UI Improvements
+- **Chat Panel**: Fixed form submission and Enter key handling
+- **Input Overflow**: Fixed input boxes extending beyond card boundaries
+- **Layout Stability**: Prevented text jumping on hover (edit icon space reservation)
+- **Height Management**: Proper flexbox layout for full-height panels
 
 ---
 
