@@ -2030,9 +2030,21 @@ def run_tool(
     api_key = _get_api_key()
     client = genai.Client(api_key=api_key)
 
-    # Build user message
-    today = datetime.now().strftime("%Y-%m-%d")
-    user_message = f"Today's date is {today}.\n\nUser request: {prompt}"
+    # Build user message with explicit date calculation instructions
+    today = datetime.now()
+    today_str = today.strftime("%Y-%m-%d")
+    day_name = today.strftime("%A")  # Monday, Tuesday, etc.
+    
+    user_message = f"""Today's date is {today_str} ({day_name}).
+
+CRITICAL DATE INSTRUCTIONS:
+- If the user mentions dates like "this saturday", "next Monday", "this week", etc., calculate the ACTUAL dates based on TODAY ({today_str}).
+- DO NOT use dates from the attached file if the user specifies dates in their prompt.
+- "this saturday" means the next Saturday from today.
+- "next Monday" means the next Monday from today.
+- Calculate dates relative to TODAY, not dates found in files.
+
+User request: {prompt}"""
 
     if attached_file_content:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"

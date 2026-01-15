@@ -31,6 +31,13 @@ _weather_cache = {}  # (lat, lng, date) -> weather dict
 _logo_cache = {}     # company_name -> logo_url
 
 
+def clear_weather_cache():
+    """Clear the weather cache. Useful for debugging or forcing fresh data."""
+    global _weather_cache
+    _weather_cache = {}
+    print("[WEATHER DEBUG] Weather cache cleared")
+
+
 def get_location_coordinates(address: str) -> Optional[dict]:
     """
     Get GPS coordinates for an address using Google Maps Geocoding API.
@@ -94,27 +101,52 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     # Check cache first (round coords to 2 decimals for cache key)
     cache_key = (round(lat, 2), round(lng, 2), date)
     if cache_key in _weather_cache:
-        return _weather_cache[cache_key]
+        cached = _weather_cache[cache_key]
+        print(f"[WEATHER DEBUG] Using cached weather for ({lat:.2f}, {lng:.2f}) on {date}: {cached.get('temperature', {}).get('high', 'N/A')}°F")
+        return cached
+    
+    print(f"[WEATHER DEBUG] Fetching fresh weather for ({lat:.2f}, {lng:.2f}) on {date}...")
 
     try:
         # Parse the date
         target_date = datetime.strptime(date, '%Y-%m-%d')
-        today = datetime.now()
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        target_date = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Open-Meteo only provides forecast up to 16 days ahead
         days_ahead = (target_date - today).days
-
-        params = urllib.parse.urlencode({
-            'latitude': lat,
-            'longitude': lng,
-            'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
-            'temperature_unit': 'fahrenheit',
-            'windspeed_unit': 'mph',
-            'timezone': 'auto',
-            'start_date': date,
-            'end_date': date
-        })
-        url = f"https://api.open-meteo.com/v1/forecast?{params}"
+        
+        # Check if date is in the past (more than 1 day ago)
+        if days_ahead < -1:
+            print(f"[WEATHER DEBUG] WARNING: Date {date} is in the past ({days_ahead} days ago). Open-Meteo forecast API only works for future dates. Using historical API...")
+            # Use historical API for past dates
+            params = urllib.parse.urlencode({
+                'latitude': lat,
+                'longitude': lng,
+                'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
+                'temperature_unit': 'fahrenheit',
+                'windspeed_unit': 'mph',
+                'timezone': 'auto',
+                'start_date': date,
+                'end_date': date
+            })
+            url = f"https://api.open-meteo.com/v1/forecast?{params}"
+        elif days_ahead > 16:
+            print(f"[WEATHER DEBUG] WARNING: Date {date} is more than 16 days in the future. Open-Meteo forecast API only supports up to 16 days ahead.")
+            return None
+        else:
+            # Use forecast API for future dates (up to 16 days)
+            params = urllib.parse.urlencode({
+                'latitude': lat,
+                'longitude': lng,
+                'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
+                'temperature_unit': 'fahrenheit',
+                'windspeed_unit': 'mph',
+                'timezone': 'auto',
+                'start_date': date,
+                'end_date': date
+            })
+            url = f"https://api.open-meteo.com/v1/forecast?{params}"
 
         with urllib.request.urlopen(url, timeout=10) as response:
             data = json.loads(response.read().decode())
@@ -185,6 +217,7 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             }
             # Cache the result
             _weather_cache[cache_key] = weather_result
+            print(f"[WEATHER DEBUG] Fetched and cached weather: {weather_result.get('temperature', {}).get('high', 'N/A')}°F high, {weather_result.get('temperature', {}).get('low', 'N/A')}°F low, sunrise: {weather_result.get('sunrise', 'N/A')}, sunset: {weather_result.get('sunset', 'N/A')}")
             return weather_result
     except Exception as e:
         print(f"Warning: Failed to get weather data: {e}")
@@ -316,7 +349,8 @@ def get_client_research(client_name: str) -> Optional[dict]:
 
 def enrich_production_data(
     extracted_data: dict,
-    progress_callback: Optional[Callable[[str, int, str], None]] = None
+    progress_callback: Optional[Callable[[str, int, str], None]] = None,
+    clear_cache: bool = False
 ) -> dict:
     """
     Enrich extracted production data with information from external APIs.
@@ -325,10 +359,13 @@ def enrich_production_data(
     Args:
         extracted_data: Production data extracted from LLM
         progress_callback: Optional callback for progress updates (stage_id, percent, message)
+        clear_cache: If True, clear weather cache before fetching (useful for debugging)
 
     Returns:
         Enriched data with coordinates, weather, logos, and research
     """
+    if clear_cache:
+        clear_weather_cache()
     def emit(stage_id: str, percent: int, message: str):
         """Emit progress update."""
         if progress_callback:
@@ -406,13 +443,18 @@ def enrich_production_data(
     for loc in locations:
         if loc.get('coordinates'):
             primary_coords = loc['coordinates']
+            print(f"[WEATHER DEBUG] Using location '{loc.get('name', 'Unknown')}' at ({primary_coords['lat']:.4f}, {primary_coords['lng']:.4f}) for weather")
             break
+    
+    if not primary_coords:
+        print(f"[WEATHER DEBUG] WARNING: No coordinates found for any location. Locations: {[loc.get('name', 'Unknown') for loc in locations]}")
 
     # PARALLEL WEATHER: Fetch weather for all schedule days at once
     if primary_coords and schedule_days:
         emit("weather", 70, "Fetching weather data...")
 
         dates_to_fetch = [day.get('date') for day in schedule_days if day.get('date')]
+        print(f"[WEATHER DEBUG] Fetching weather for dates: {dates_to_fetch} at coordinates ({primary_coords['lat']:.4f}, {primary_coords['lng']:.4f})")
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             weather_futures = {

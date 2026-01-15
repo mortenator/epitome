@@ -9,10 +9,12 @@ Your goal is to extract production logistics from a user's prompt and an optiona
 
 ### INPUTS
 1. **User Prompt:** e.g., "Create call sheets for a 3-day shoot starting next Monday for Nike."
+   - **IMPORTANT:** Dates mentioned in the user prompt (e.g., "this saturday", "next Monday") take ABSOLUTE PRIORITY over any dates found in attached files.
 2. **Attached File (Optional):** A crew list, schedule, budget document, or production document (PDF/CSV/TXT).
    - Budget documents may contain: job names, client info, crew roles with rates, shooting dates, locations
    - Crew lists may contain: names, roles, departments, contact information, rates
    - Schedules may contain: dates, call times, locations, scene information
+   - **NOTE:** If the user's prompt specifies dates, IGNORE dates from the file and use the user's dates instead.
 
 ### OBJECTIVE
 Analyze the inputs and produce a JSON object adhering to the schema below.
@@ -79,7 +81,11 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
    - Prompt: "production in New York" → address: "New York, NY" or "New York"
    - If multiple locations mentioned, use the primary/main location for the first location entry
 3. **Standard Roles:** Always include keys for 'Director', 'Producer', '1st AD', 'Director of Photography', 'Gaffer', 'Key Grip', 'HMU', 'Wardrobe' in the crew list. If names are found in the file, use them. Only use null if the information is truly not present.
-4. **Dates:** If "next Monday" is said, calculate the date relative to today. If dates are in the attached file, use those exact dates.
+4. **Dates - CRITICAL PRIORITY:** 
+   - **USER PROMPT DATES TAKE PRIORITY:** If the user specifies a date in their prompt (e.g., "this saturday", "next Monday", "January 18", "starting next week"), you MUST calculate and use those dates based on TODAY'S DATE, NOT dates from the attached file.
+   - **Calculate relative dates:** "this saturday" = the next Saturday from today, "next Monday" = the next Monday from today, etc.
+   - **Only use file dates if user doesn't specify:** Only use dates from the attached file if the user's prompt does NOT mention any dates or time references.
+   - **Example:** If user says "shoot in Oslo scheduled for this saturday" and the file has dates in August 2025, use THIS SATURDAY (January 18, 2026), NOT the August dates from the file.
 5. **Defaults:** If no attached file is present, return the template structure with "TBD" values so the user gets a usable blank template.
 6. **Data Quality:** Do not leave fields as null or "TBD" if the information exists in the attached file or user prompt. Extract it accurately.
 """

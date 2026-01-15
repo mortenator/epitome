@@ -141,10 +141,16 @@ def format_time(dt: Optional[datetime]) -> str:
     if not dt:
         return "TBD"
     try:
-        return dt.strftime("%-I:%M %p")
+        # Try macOS/Linux format first (removes leading zero from hour)
+        formatted = dt.strftime("%-I:%M %p")
+        return formatted
     except ValueError:
-        # Windows doesn't support %-I
-        return dt.strftime("%I:%M %p").lstrip("0")
+        # Windows doesn't support %-I, use alternative
+        formatted = dt.strftime("%I:%M %p")
+        # Remove leading zero only from hour, not from minutes
+        if formatted.startswith("0"):
+            formatted = formatted[1:]
+        return formatted
 
 
 # =============================================================================
@@ -278,17 +284,18 @@ async def create_project_from_generation(
         if not day_weather:
             day_weather = weather  # Fallback to logistics weather
         
-        # Debug: Log weather data being saved
-        if day_weather:
-            print(f"[DB DEBUG] Day {day_num} weather data: {day_weather}")
-
-        # Extract weather data properly
+        # Initialize weather variables FIRST (before any conditional checks)
         weather_high = None
         weather_low = None
         weather_summary = None
         weather_sunrise = None
         weather_sunset = None
         
+        # Debug: Log weather data being saved
+        if day_weather:
+            print(f"[DB DEBUG] Day {day_num} weather data: {day_weather}")
+        
+        # Extract weather data properly
         if day_weather:
             # Handle nested temperature structure
             temp_data = day_weather.get("temperature", {})
@@ -304,12 +311,22 @@ async def create_project_from_generation(
             weather_sunrise = day_weather.get("sunrise")
             weather_sunset = day_weather.get("sunset")
         
+        # Debug: Log extracted values
+        print(f"[DB DEBUG] Day {day_num} extracted - high: {weather_high}, low: {weather_low}, sunrise: {weather_sunrise}, sunset: {weather_sunset}")
+        
+        # Parse call times with debug logging
+        crew_call_time = parse_time(day.get("crew_call"), shoot_date)
+        shoot_call_time = parse_time(day.get("shoot_call"), shoot_date)
+        
+        # Debug: Log what's being saved
+        print(f"[DB DEBUG] Day {day_num} - crew_call from data: '{day.get('crew_call')}', parsed: {crew_call_time}, formatted: {format_time(crew_call_time)}")
+        
         call_sheet = CallSheet(
             id=str(uuid.uuid4()),
             dayNumber=day_num,
             shootDate=shoot_date,
-            generalCrewCall=parse_time(day.get("crew_call"), shoot_date),
-            firstShot=parse_time(day.get("shoot_call"), shoot_date),
+            generalCrewCall=crew_call_time,
+            firstShot=shoot_call_time,
             weatherHigh=weather_high,
             weatherLow=weather_low,
             weatherSummary=weather_summary,
