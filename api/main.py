@@ -3,6 +3,7 @@ import asyncio
 import json
 import shutil
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -227,9 +228,10 @@ async def run_generation_task(
             # Debug: Log the data being saved
             print(f"[DB DEBUG] Saving to database...")
             print(f"[DB DEBUG] production_info: {enriched_data.get('production_info', {})}")
-            print(f"[DB DEBUG] crew_list count: {len(enriched_data.get('crew_list', []))}")
-            if enriched_data.get('crew_list'):
-                print(f"[DB DEBUG] First crew member: {enriched_data['crew_list'][0]}")
+            crew_list = enriched_data.get('crew_list', [])
+            print(f"[DB DEBUG] crew_list count: {len(crew_list)}")
+            if crew_list:
+                print(f"[DB DEBUG] First crew member: {crew_list[0]}")
             print(f"[DB DEBUG] schedule_days: {enriched_data.get('schedule_days', [])}")
 
             async with AsyncSessionLocal() as db:
@@ -238,14 +240,33 @@ async def run_generation_task(
                 print(f"[DB DEBUG] Project saved with ID: {project_id}")
         except Exception as db_error:
             # Log but don't fail - workbook was still generated
-            print(f"Warning: Database save failed: {db_error}")
+            error_type = type(db_error).__name__
+            error_msg = str(db_error)
+            print(f"Warning: Database save failed: {error_type}: {error_msg}")
+            if "nodename" in error_msg.lower() or "servname" in error_msg.lower():
+                print("  This is a DNS resolution error. Check your DATABASE_URL in .env file.")
+                print("  The database hostname cannot be resolved. Verify:")
+                print("  - DATABASE_URL is correctly formatted")
+                print("  - Network connectivity to Supabase")
+                print("  - DNS resolution is working")
+            elif "connection" in error_msg.lower():
+                print("  This is a connection error. Check:")
+                print("  - DATABASE_URL is correct")
+                print("  - Supabase database is accessible")
+                print("  - Firewall/network settings")
 
+        # Store enriched data in result for fallback when database save fails
+        if not project_id and enriched_data:
+            result['enriched_data'] = enriched_data
+            result['job_id'] = job_id  # Store job_id for fallback endpoint
+            print(f"[DB DEBUG] Stored enriched data in result (fallback mode, job_id: {job_id})")
+        
         progress_manager.set_result(job_id, result)
 
-        # Send download ready event with project_id
+        # Send download ready event with project_id and job_id (for fallback)
         download_event = ProgressEvent(
             "download_ready", 100,
-            json.dumps({"filename": new_filename, "project_id": project_id})
+            json.dumps({"filename": new_filename, "project_id": project_id, "job_id": job_id if not project_id else None})
         )
         queue = progress_manager.get_queue(job_id)
         if queue:
@@ -341,6 +362,111 @@ async def get_result(job_id: str):
         "download_filename": result.get("download_filename"),
         "project_id": result.get("project_id"),
         "error": result.get("error")
+    }
+
+
+@app.get("/api/generation/{job_id}/data")
+async def get_generation_data(job_id: str):
+    """
+    Get project data from generation result (fallback when database save fails).
+    Returns the same format as /api/project/{project_id} but from enriched_data.
+    """
+    result = progress_manager.get_result(job_id)
+    if not result or 'enriched_data' not in result:
+        raise HTTPException(status_code=404, detail="Generation data not found")
+    
+    enriched_data = result['enriched_data']
+    
+    # Format enriched_data to match frontend ProjectData interface
+    from api.services.project_service import format_department_name, normalize_department
+    
+    # Group crew by department
+    departments_map = {}
+    crew_list = enriched_data.get('crew_list', [])
+    for crew_data in crew_list:
+        dept = normalize_department(crew_data.get('department', 'OTHER'))
+        dept_name = format_department_name(dept)
+        if dept_name not in departments_map:
+            departments_map[dept_name] = []
+        
+        departments_map[dept_name].append({
+            "id": str(uuid.uuid4()),  # Generate temporary ID
+            "role": crew_data.get('role', 'TBD'),
+            "name": crew_data.get('name'),
+            "phone": crew_data.get('phone'),
+            "email": crew_data.get('email'),
+            "callTime": "TBD",
+            "location": "Set",
+        })
+    
+    # Format as Department[]
+    departments = []
+    for dept_name, crew_list in departments_map.items():
+        departments.append({
+            "name": dept_name,
+            "count": len(crew_list),
+            "expanded": False,
+            "crew": crew_list,
+        })
+    
+    # Sort departments
+    dept_order = [
+        "PRODUCTION", "CAMERA DEPT", "GRIP & ELECTRIC", "ART DEPT",
+        "WARDROBE", "HAIR & MAKEUP", "SOUND", "LOCATIONS",
+        "TRANSPORTATION", "CATERING", "POST PRODUCTION", "OTHER"
+    ]
+    departments.sort(key=lambda d: dept_order.index(d["name"]) if d["name"] in dept_order else 999)
+    
+    # Format production info
+    prod_info = enriched_data.get('production_info', {})
+    
+    # Format call sheets
+    schedule_days = enriched_data.get('schedule_days', [])
+    call_sheets = []
+    for day in schedule_days:
+        call_sheets.append({
+            "id": str(uuid.uuid4()),
+            "dayNumber": day.get('day_number', 1),
+            "shootDate": day.get('date') if day.get('date') != 'TBD' else None,
+            "generalCrewCall": day.get('crew_call', 'TBD'),
+            "weather": {
+                "high": None,
+                "low": None,
+                "summary": None,
+                "sunrise": None,
+                "sunset": None,
+            },
+            "hospital": {
+                "name": None,
+                "address": None,
+            },
+        })
+    
+    # Format locations
+    locations_data = enriched_data.get('logistics', {}).get('locations', [])
+    locations = []
+    for loc in locations_data:
+        locations.append({
+            "id": str(uuid.uuid4()),
+            "name": loc.get('name', 'TBD'),
+            "address": loc.get('address'),
+            "city": None,
+            "state": None,
+            "mapLink": loc.get('map_link'),
+            "parkingNotes": loc.get('parking'),
+        })
+    
+    return {
+        "project": {
+            "id": job_id,  # Use job_id as temporary project ID
+            "jobName": prod_info.get('job_name', 'TBD'),
+            "jobNumber": prod_info.get('job_number', 'TBD'),
+            "client": prod_info.get('client', 'TBD'),
+            "agency": prod_info.get('agency'),
+        },
+        "callSheets": call_sheets,
+        "locations": locations,
+        "departments": departments,
     }
 
 

@@ -19,17 +19,102 @@ load_dotenv()
 DIRECT_URL = os.getenv("DIRECT_URL", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# #region agent log
+import json, time
+# Extract hostname from URLs for debugging (without exposing full credentials)
+direct_hostname = None
+db_hostname = None
+if DIRECT_URL:
+    import re
+    match = re.search(r'@([^:/]+)', DIRECT_URL)
+    direct_hostname = match.group(1) if match else None
+if DATABASE_URL:
+    import re
+    match = re.search(r'@([^:/]+)', DATABASE_URL)
+    db_hostname = match.group(1) if match else None
+with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:20","message":"DATABASE_URL values loaded","data":{"DIRECT_URL_set":bool(DIRECT_URL),"DATABASE_URL_set":bool(DATABASE_URL),"DIRECT_URL_length":len(DIRECT_URL) if DIRECT_URL else 0,"DATABASE_URL_length":len(DATABASE_URL) if DATABASE_URL else 0,"DIRECT_URL_hostname":direct_hostname,"DATABASE_URL_hostname":db_hostname},"timestamp":int(time.time()*1000)})+'\n')
+# #endregion
+
 # Use DIRECT_URL if available (bypasses pgbouncer), otherwise fall back to DATABASE_URL
-db_url = DIRECT_URL or DATABASE_URL
+# Test DNS resolution for DIRECT_URL, fall back to DATABASE_URL if it fails
+db_url = None
+if DIRECT_URL:
+    # Test if DIRECT_URL hostname can be resolved
+    try:
+        import socket, re
+        hostname_match = re.search(r'@([^:/]+)', DIRECT_URL)
+        if hostname_match:
+            hostname = hostname_match.group(1)
+            # Test DNS resolution
+            socket.gethostbyname(hostname)
+            db_url = DIRECT_URL
+        else:
+            # No hostname found in DIRECT_URL, use DATABASE_URL
+            db_url = DATABASE_URL
+    except (socket.gaierror, AttributeError) as e:
+        # DNS resolution failed for DIRECT_URL, fall back to DATABASE_URL
+        # #region agent log
+        import json, time
+        with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:32","message":"DIRECT_URL DNS test failed, falling back to DATABASE_URL","data":{"error":str(e)},"timestamp":int(time.time()*1000)})+'\n')
+        # #endregion
+        db_url = DATABASE_URL
+else:
+    db_url = DATABASE_URL
+
+# #region agent log
+import re
+hostname_match = re.search(r'@([^:/]+)', db_url) if db_url else None
+hostname = hostname_match.group(1) if hostname_match else None
+with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:24","message":"db_url selected","data":{"db_url_set":bool(db_url),"db_url_length":len(db_url) if db_url else 0,"using_DIRECT_URL":bool(DIRECT_URL),"hostname":hostname},"timestamp":int(time.time()*1000)})+'\n')
+# #endregion
 
 if db_url:
+    # #region agent log
+    import re
+    # Log URL structure without exposing credentials
+    url_parts = {}
+    if db_url:
+        # Extract scheme, hostname, port, database name
+        scheme_match = re.search(r'^([^:]+)://', db_url)
+        url_parts['scheme'] = scheme_match.group(1) if scheme_match else None
+        hostname_match = re.search(r'@([^:/]+)', db_url)
+        url_parts['hostname'] = hostname_match.group(1) if hostname_match else None
+        port_match = re.search(r':(\d+)/', db_url)
+        url_parts['port'] = port_match.group(1) if port_match else None
+        db_match = re.search(r'/([^?]+)', db_url.split('@')[1] if '@' in db_url else '')
+        url_parts['database'] = db_match.group(1) if db_match else None
+        url_parts['has_credentials'] = '@' in db_url
+        url_parts['url_length'] = len(db_url)
+    with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:42","message":"db_url structure before conversion","data":url_parts,"timestamp":int(time.time()*1000)})+'\n')
+    # #endregion
+    
     # Convert to async format
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://")
     # Remove pgbouncer params if present
     if "?pgbouncer=true" in db_url:
         db_url = db_url.replace("?pgbouncer=true", "")
+    
+    # #region agent log
+    hostname_match_after = re.search(r'@([^:/]+)', db_url) if db_url else None
+    hostname_after = hostname_match_after.group(1) if hostname_match_after else None
+    with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:60","message":"db_url after conversion","data":{"hostname":hostname_after,"db_url_length":len(db_url),"has_hostname":bool(hostname_after)},"timestamp":int(time.time()*1000)})+'\n')
+    # #endregion
+else:
+    # #region agent log
+    with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"database.py:55","message":"db_url is empty - no database connection possible","data":{},"timestamp":int(time.time()*1000)})+'\n')
+    # #endregion
 
 # Create async engine with statement cache disabled (for pgbouncer compatibility)
+# #region agent log
+with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"database.py:61","message":"Creating async engine","data":{"db_url_set":bool(db_url),"db_url_length":len(db_url) if db_url else 0},"timestamp":int(time.time()*1000)})+'\n')
+# #endregion
 engine = create_async_engine(
     db_url,
     echo=False,  # Set to True for SQL debugging
@@ -349,6 +434,29 @@ class Client(Base):
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency for database sessions."""
+    # #region agent log
+    import socket
+    try:
+        hostname_match = re.search(r'@([^:/]+)', db_url) if db_url else None
+        hostname = hostname_match.group(1) if hostname_match else None
+        if hostname:
+            try:
+                resolved_ip = socket.gethostbyname(hostname)
+                dns_ok = True
+            except socket.gaierror as dns_err:
+                resolved_ip = None
+                dns_ok = False
+                dns_error = str(dns_err)
+        else:
+            resolved_ip = None
+            dns_ok = False
+            dns_error = "No hostname found"
+        with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"database.py:383","message":"DNS resolution test before connection","data":{"hostname":hostname,"dns_resolved":dns_ok,"resolved_ip":resolved_ip,"dns_error":dns_error if not dns_ok else None},"timestamp":int(time.time()*1000)})+'\n')
+    except Exception as e:
+        with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"database.py:383","message":"DNS test exception","data":{"error":str(e)},"timestamp":int(time.time()*1000)})+'\n')
+    # #endregion
     async with AsyncSessionLocal() as session:
         try:
             yield session

@@ -163,12 +163,17 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
    - Prompt: "production in New York" → address: "New York, NY" or "New York"
    - If multiple locations mentioned, use the primary/main location for the first location entry
 3. **Standard Roles:** Always include keys for 'Director', 'Producer', '1st AD', 'Director of Photography', 'Gaffer', 'Key Grip', 'HMU', 'Wardrobe' in the crew list. If names are found in the file, use them. Only use null if the information is truly not present.
-4. **Dates - CRITICAL FORMAT REQUIREMENT:** 
-   - **DATE FORMAT IS MANDATORY:** All dates in the "date" field MUST be in YYYY-MM-DD format (e.g., "2025-08-28"). 
+4. **Dates - CRITICAL FORMAT REQUIREMENT:**
+   - **DATE FORMAT IS MANDATORY:** All dates in the "date" field MUST be in YYYY-MM-DD format (e.g., "2025-08-28").
    - **NEVER use formats like:** "TBD - October 2025", "TBD - 10", "October 2025", or any other format.
    - **If you cannot determine a valid date:** Use "TBD" (just "TBD", not "TBD - something").
-   - **Date calculation:** If "next Monday" is said, calculate the date relative to today and format as YYYY-MM-DD. If dates are in the attached file, parse them and convert to YYYY-MM-DD format.
-   - **Example:** If the file says "August 28, 2025" or "8/28/2025", convert it to "2025-08-28".
+   - **USER PROMPT DATES OVERRIDE DOCUMENT DATES:** If the user's prompt mentions dates (e.g., "this Saturday", "next Monday", "starting January 20th"), ALWAYS use those dates instead of any dates found in the attached document. The user's prompt reflects their current intent.
+   - **Date calculation from relative terms:** Calculate dates relative to "today's date" provided at the start of the message:
+     - "this Saturday" = find the upcoming Saturday from today
+     - "next Monday" = find the next Monday from today
+     - "starting January 20th" = use the next occurrence of January 20th
+   - **Multi-day shoots:** If the user says "4 day shoot starting this Saturday", generate 4 consecutive days starting from that Saturday.
+   - **Example:** If today is 2026-01-15 (Wednesday) and user says "this Saturday", use 2026-01-18. For a 4-day shoot: Day 1 = 2026-01-18, Day 2 = 2026-01-19, Day 3 = 2026-01-20, Day 4 = 2026-01-21.
 5. **Defaults:** If no attached file is present, return the template structure with "TBD" values so the user gets a usable blank template.
 6. **Data Quality:** Do not leave fields as null or "TBD" if the information exists in the attached file or user prompt. Extract it accurately.
 """

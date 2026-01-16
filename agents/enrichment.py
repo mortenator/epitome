@@ -81,7 +81,7 @@ def get_location_coordinates(address: str) -> Optional[dict]:
 
 def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     """
-    Get weather data for a location and date using Open-Meteo API (free, no key needed).
+    Get weather data for a location and date using Google Maps Platform Weather API.
 
     Args:
         lat: Latitude
@@ -91,6 +91,23 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     Returns:
         Dict with weather info, or None if failed
     """
+    # Validate coordinates
+    if lat is None or lng is None:
+        print(f"Warning: Invalid coordinates (lat={lat}, lng={lng}) for date {date}")
+        return None
+    
+    if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+        print(f"Warning: Coordinates must be numbers (lat={lat}, lng={lng}) for date {date}")
+        return None
+    
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        print(f"Warning: Coordinates out of valid range (lat={lat}, lng={lng}) for date {date}")
+        return None
+    
+    if not GOOGLE_MAPS_API_KEY:
+        print(f"Warning: GOOGLE_MAPS_API_KEY not set. Cannot fetch weather data.")
+        return None
+    
     # Check cache first (round coords to 2 decimals for cache key)
     cache_key = (round(lat, 2), round(lng, 2), date)
     if cache_key in _weather_cache:
@@ -102,88 +119,141 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         target_date = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Open-Meteo only provides forecast up to 16 days ahead
         days_ahead = (target_date - today).days
 
-        # For dates beyond 16 days, we can't get accurate weather forecasts
-        # Return None to indicate weather data is not available
-        if days_ahead > 16:
-            print(f"Warning: Date {date} is more than 16 days in the future. Weather forecasts not available.")
+        # Google Weather API provides forecasts up to 10 days ahead
+        if days_ahead > 10:
+            print(f"Warning: Date {date} is {days_ahead} days in the future (limit: 10 days). Weather forecasts not available.")
+            return None
+        
+        # For dates in the past, use hourly history (past 24 hours only)
+        if days_ahead < -1:
+            print(f"Warning: Date {date} is more than 1 day in the past. Historical weather data limited to past 24 hours.")
             return None
 
-        # Use forecast API (works for past dates and future dates up to 16 days)
-        params = urllib.parse.urlencode({
-            'latitude': lat,
-            'longitude': lng,
-            'daily': 'sunrise,sunset,temperature_2m_max,temperature_2m_min,windspeed_10m_max,weathercode',
-            'temperature_unit': 'fahrenheit',
-            'windspeed_unit': 'mph',
-            'timezone': 'auto',
-            'start_date': date,
-            'end_date': date
-        })
-        url = f"https://api.open-meteo.com/v1/forecast?{params}"
+        # Use daily forecast endpoint for future dates (0-10 days ahead)
+        # For today, use current conditions + daily forecast
+        if days_ahead >= 0 and days_ahead <= 10:
+            # Daily forecast endpoint
+            params = urllib.parse.urlencode({
+                'key': GOOGLE_MAPS_API_KEY,
+                'location.latitude': lat,
+                'location.longitude': lng,
+                'days': 10,  # Get up to 10 days
+                'unitsSystem': 'IMPERIAL'
+            })
+            url = f"https://weather.googleapis.com/v1/forecast/days:lookup?{params}"
+        else:
+            # For past dates, skip (history API only covers past 24 hours)
+            return None
+        
+        # Debug: Log the request for troubleshooting
+        print(f"[DEBUG] Fetching weather for {date} at ({lat}, {lng}) - {days_ahead} days from today")
 
         with urllib.request.urlopen(url, timeout=10) as response:
             data = json.loads(response.read().decode())
+        
+        # Debug: Log response structure
+        print(f"[DEBUG] Google Weather API response keys: {list(data.keys())}")
 
-        if 'daily' in data:
-            daily = data['daily']
+        # Parse Google Weather API response - handle both 'forecastDays' and 'dailyForecasts' keys
+        forecasts = data.get('forecastDays') or data.get('dailyForecasts') or []
 
-            # Weather code to condition mapping
-            weather_codes = {
-                0: 'Clear Sky',
-                1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
-                45: 'Foggy', 48: 'Foggy',
-                51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
-                61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
-                71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow',
-                80: 'Light Showers', 81: 'Showers', 82: 'Heavy Showers',
-                95: 'Thunderstorm'
-            }
+        if forecasts:
+            # Debug: Log first forecast structure
+            if forecasts:
+                print(f"[DEBUG] First forecast keys: {list(forecasts[0].keys())}")
 
-            weather_code = daily.get('weathercode', [0])[0] if daily.get('weathercode') else 0
-            conditions = weather_codes.get(weather_code, 'Unknown')
+            # Find the forecast for our target date
+            target_forecast = None
+            for forecast in forecasts:
+                # Handle different date formats in response
+                date_obj = forecast.get('date', {})
+                if isinstance(date_obj, dict):
+                    forecast_date = date_obj.get('year', 0), date_obj.get('month', 0), date_obj.get('day', 0)
+                    forecast_date_str = f"{forecast_date[0]}-{forecast_date[1]:02d}-{forecast_date[2]:02d}"
+                else:
+                    forecast_date_str = str(date_obj)
 
-            # Format sunrise/sunset times
-            sunrise_raw = daily.get('sunrise', [''])[0] if daily.get('sunrise') else ''
-            sunset_raw = daily.get('sunset', [''])[0] if daily.get('sunset') else ''
+                if forecast_date_str == date:
+                    target_forecast = forecast
+                    break
 
-            sunrise = ''
-            sunset = ''
-            if sunrise_raw:
-                try:
-                    sunrise_dt = datetime.fromisoformat(sunrise_raw)
+            if not target_forecast:
+                # If exact date not found, use first forecast (closest match)
+                target_forecast = forecasts[0] if forecasts else None
+            
+            if target_forecast:
+                # Extract temperature data
+                temp_data = target_forecast.get('temperature', {})
+                temp_high = temp_data.get('max')
+                temp_low = temp_data.get('min')
+                
+                # Extract conditions
+                conditions_data = target_forecast.get('condition', '')
+                conditions = conditions_data if conditions_data else 'Unknown'
+                
+                # Extract sunrise/sunset
+                astro_data = target_forecast.get('astronomicalData', {})
+                sunrise_data = astro_data.get('sunrise', {})
+                sunset_data = astro_data.get('sunset', {})
+                
+                sunrise = ''
+                sunset = ''
+                if sunrise_data:
+                    hour = sunrise_data.get('hour', 0)
+                    minute = sunrise_data.get('minute', 0)
+                    sunrise_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
                     sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
-                except:
-                    sunrise = sunrise_raw
-            if sunset_raw:
-                try:
-                    sunset_dt = datetime.fromisoformat(sunset_raw)
+                if sunset_data:
+                    hour = sunset_data.get('hour', 0)
+                    minute = sunset_data.get('minute', 0)
+                    sunset_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
                     sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
-                except:
-                    sunset = sunset_raw
-
-            temp_high = daily.get('temperature_2m_max', [None])[0]
-            temp_low = daily.get('temperature_2m_min', [None])[0]
-            wind = daily.get('windspeed_10m_max', [None])[0]
-
-            weather_result = {
-                'date': date,
-                'sunrise': sunrise,
-                'sunset': sunset,
-                'temperature': {
-                    'high': f"{round(temp_high)}F" if temp_high else 'TBD',
-                    'low': f"{round(temp_low)}F" if temp_low else 'TBD'
-                },
-                'conditions': conditions,
-                'wind': f"{round(wind)} mph" if wind else 'TBD'
-            }
-            # Cache the result
-            _weather_cache[cache_key] = weather_result
-            return weather_result
+                
+                # Extract wind data
+                wind_data = target_forecast.get('wind', {})
+                wind_speed = wind_data.get('speed')
+                
+                weather_result = {
+                    'date': date,
+                    'sunrise': sunrise,
+                    'sunset': sunset,
+                    'temperature': {
+                        'high': f"{round(temp_high)}F" if temp_high else 'TBD',
+                        'low': f"{round(temp_low)}F" if temp_low else 'TBD'
+                    },
+                    'conditions': conditions,
+                    'wind': f"{round(wind_speed)} mph" if wind_speed else 'TBD'
+                }
+                # Cache the result
+                _weather_cache[cache_key] = weather_result
+                return weather_result
+            else:
+                print(f"Warning: No forecast data found for date {date}")
+                return None
+        else:
+            print(f"Warning: Weather API response missing forecast data for {date}. Keys: {list(data.keys())}")
+            return None
+    except urllib.error.HTTPError as e:
+        error_body = None
+        try:
+            error_body = e.read().decode('utf-8')
+        except:
+            pass
+        
+        print(f"Warning: Failed to get weather data for {date}: HTTP Error {e.code}: {e.reason}")
+        if e.code == 400:
+            if error_body:
+                print(f"  API error response: {error_body}")
+            print(f"  This usually means invalid parameters (date, coordinates, or API format changed)")
+            print(f"  Date: {date}, Coordinates: ({lat}, {lng}), Days ahead: {days_ahead if 'days_ahead' in locals() else 'N/A'}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"Warning: Failed to get weather data for {date}: Network error: {e.reason}")
+        return None
     except Exception as e:
-        print(f"Warning: Failed to get weather data: {e}")
+        print(f"Warning: Failed to get weather data for {date}: {type(e).__name__}: {e}")
 
     return None
 
@@ -411,54 +481,79 @@ def enrich_production_data(
 
     # PARALLEL WEATHER: Fetch weather for all schedule days at once
     if primary_coords and schedule_days:
-        emit("weather", 70, "Fetching weather data...")
+        # Validate coordinates before proceeding
+        lat = primary_coords.get('lat')
+        lng = primary_coords.get('lng')
+        
+        if lat is None or lng is None:
+            print(f"Warning: Primary coordinates missing lat/lng. Cannot fetch weather data.")
+            print(f"  Coordinates: {primary_coords}")
+        elif not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+            print(f"Warning: Primary coordinates are not valid numbers. Cannot fetch weather data.")
+            print(f"  lat: {lat} (type: {type(lat)}), lng: {lng} (type: {type(lng)})")
+        else:
+            emit("weather", 70, "Fetching weather data...")
 
-        # Filter and validate dates - only include properly formatted YYYY-MM-DD dates
-        def is_valid_date(date_str: str) -> bool:
-            """Check if date string is in YYYY-MM-DD format."""
-            if not date_str or date_str.upper() == 'TBD':
-                return False
-            try:
-                datetime.strptime(date_str, '%Y-%m-%d')
-                return True
-            except (ValueError, TypeError):
-                return False
-
-        dates_to_fetch = [
-            day.get('date') 
-            for day in schedule_days 
-            if day.get('date') and is_valid_date(day.get('date'))
-        ]
-
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            weather_futures = {
-                executor.submit(
-                    get_weather_data,
-                    primary_coords['lat'],
-                    primary_coords['lng'],
-                    date
-                ): date for date in dates_to_fetch
-            }
-
-            weather_results = {}
-            for future in as_completed(weather_futures):
-                date = weather_futures[future]
+            # Filter and validate dates - only include properly formatted YYYY-MM-DD dates
+            def is_valid_date(date_str: str) -> bool:
+                """Check if date string is in YYYY-MM-DD format."""
+                if not date_str or date_str.upper() == 'TBD':
+                    return False
                 try:
-                    result = future.result()
-                    if result:
-                        weather_results[date] = result
-                except Exception as e:
-                    print(f"Warning: Weather fetch for {date} failed: {e}")
+                    datetime.strptime(date_str, '%Y-%m-%d')
+                    return True
+                except (ValueError, TypeError):
+                    return False
 
-        # Apply weather results to schedule days
-        for day in schedule_days:
-            date = day.get('date')
-            if date and date in weather_results:
-                day['weather'] = weather_results[date]
+            # #region agent log
+            import json, time
+            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"enrichment.py:488","message":"schedule_days before date validation","data":{"schedule_days":schedule_days,"count":len(schedule_days)},"timestamp":int(time.time()*1000)})+'\n')
+            # #endregion
 
-        # Set first day's weather as logistics weather
-        if first_date and first_date in weather_results:
-            enriched['logistics']['weather'] = weather_results[first_date]
+            dates_to_fetch = [
+                day.get('date') 
+                for day in schedule_days 
+                if day.get('date') and is_valid_date(day.get('date'))
+            ]
+            
+            # #region agent log
+            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"enrichment.py:496","message":"dates_to_fetch after validation","data":{"dates_to_fetch":dates_to_fetch,"count":len(dates_to_fetch),"filtered_out":len(schedule_days)-len(dates_to_fetch)},"timestamp":int(time.time()*1000)})+'\n')
+            # #endregion
+            
+            if not dates_to_fetch:
+                print("Warning: No valid dates found for weather data. Skipping weather fetch.")
+            else:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    weather_futures = {
+                        executor.submit(
+                            get_weather_data,
+                            lat,
+                            lng,
+                            date
+                        ): date for date in dates_to_fetch
+                    }
+
+                    weather_results = {}
+                    for future in as_completed(weather_futures):
+                        date = weather_futures[future]
+                        try:
+                            result = future.result()
+                            if result:
+                                weather_results[date] = result
+                        except Exception as e:
+                            print(f"Warning: Weather fetch for {date} failed: {e}")
+
+                    # Apply weather results to schedule days
+                    for day in schedule_days:
+                        date = day.get('date')
+                        if date and date in weather_results:
+                            day['weather'] = weather_results[date]
+
+                    # Set first day's weather as logistics weather
+                    if first_date and first_date in weather_results:
+                        enriched['logistics']['weather'] = weather_results[first_date]
 
     emit("research", 85, "Finalizing enrichment...")
 
