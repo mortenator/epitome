@@ -563,10 +563,14 @@ async def get_project_for_frontend(
         phone = None
         email = None
         if crew.crew_member:
-            name = f"{crew.crew_member.firstName} {crew.crew_member.lastName}"
+            name = f"{crew.crew_member.firstName} {crew.crew_member.lastName}".strip()
             phone = crew.crew_member.phone
             email = crew.crew_member.email
+            # If name is empty after stripping, set to None
+            if not name:
+                name = None
 
+        # Always add crew member to departments, even if name is None (role is still available)
         departments_map[dept_name].append({
             "id": crew.id,
             "role": crew.role,
@@ -598,7 +602,7 @@ async def get_project_for_frontend(
     # Get client name from relation if available, otherwise fall back to legacy field
     client_name = project.client_relation.name if project.client_relation else project.client
     
-    return {
+    response_data = {
         "project": {
             "id": project.id,
             "jobName": project.jobName,
@@ -640,6 +644,8 @@ async def get_project_for_frontend(
         ],
         "departments": departments,
     }
+    
+    return response_data
 
 
 async def update_crew_rsvp(

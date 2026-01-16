@@ -233,51 +233,12 @@ async def run_generation_task(
             if crew_list:
                 print(f"[DB DEBUG] First crew member: {crew_list[0]}")
             print(f"[DB DEBUG] schedule_days: {enriched_data.get('schedule_days', [])}")
-            
-            # #region agent log
-            import json, time
-            log_path = '/Users/mortenbruun/Epitome/.cursor/debug.log'
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"crew-ui-debug","hypothesisId":"L","location":"main.py:230","message":"Before database save","data":{"crew_list_count":len(crew_list),"has_crew_data":bool(crew_list)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
 
-            # #region agent log
-            import json, time, socket, re, os
-            from api import database
-            db_url_for_test = database.db_url if hasattr(database, 'db_url') else None
-            hostname_match = re.search(r'@([^:/]+)', db_url_for_test) if db_url_for_test else None
-            hostname = hostname_match.group(1) if hostname_match else None
-            dns_ok = False
-            resolved_ip = None
-            dns_error = None
-            if hostname:
-                try:
-                    resolved_ip = socket.gethostbyname(hostname)
-                    dns_ok = True
-                except socket.gaierror as dns_err:
-                    dns_ok = False
-                    dns_error = str(dns_err)
-            else:
-                dns_error = "No hostname found"
-            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"main.py:235","message":"DNS test before connection","data":{"hostname":hostname,"dns_resolved":dns_ok,"resolved_ip":resolved_ip,"dns_error":dns_error,"db_url_set":bool(db_url_for_test)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
             async with AsyncSessionLocal() as db:
                 project_id = await create_project_from_generation(db, enriched_data)
                 result['project_id'] = project_id
                 print(f"[DB DEBUG] Project saved with ID: {project_id}")
-                
-                # #region agent log
-                import json, time
-                log_path = '/Users/mortenbruun/Epitome/.cursor/debug.log'
-                with open(log_path, 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"crew-ui-debug","hypothesisId":"M","location":"main.py:260","message":"Database save succeeded","data":{"project_id":project_id},"timestamp":int(time.time()*1000)})+'\n')
-                # #endregion
         except Exception as db_error:
-            # #region agent log
-            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"main.py:239","message":"Database connection failed","data":{"error_type":type(db_error).__name__,"error_msg":str(db_error)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
             # Log but don't fail - workbook was still generated
             error_type = type(db_error).__name__
             error_msg = str(db_error)
@@ -302,13 +263,6 @@ async def run_generation_task(
         
         progress_manager.set_result(job_id, result)
 
-        # #region agent log
-        import json, time
-        log_path = '/Users/mortenbruun/Epitome/.cursor/debug.log'
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"crew-ui-debug","hypothesisId":"N","location":"main.py:290","message":"Sending download ready event","data":{"project_id":project_id,"has_project_id":bool(project_id),"has_fallback_data":bool(not project_id and enriched_data)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
-        
         # Send download ready event with project_id and job_id (for fallback)
         download_event = ProgressEvent(
             "download_ready", 100,
@@ -524,20 +478,7 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
     Returns departments[], callSheets[], locations, and project info
     matching the frontend's TypeScript interfaces.
     """
-    # #region agent log
-    import json, time
-    log_path = '/Users/mortenbruun/Epitome/.cursor/debug.log'
-    with open(log_path, 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"crew-ui-debug","hypothesisId":"G","location":"main.py:385","message":"API endpoint called","data":{"project_id":project_id},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     data = await get_project_for_frontend(db, project_id)
-    
-    # #region agent log
-    with open(log_path, 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"crew-ui-debug","hypothesisId":"H","location":"main.py:395","message":"API response prepared","data":{"has_data":bool(data),"has_departments":bool(data.get("departments") if data else False),"departments_count":len(data.get("departments",[])) if data else 0},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     if not data:
         raise HTTPException(status_code=404, detail="Project not found")
     return data

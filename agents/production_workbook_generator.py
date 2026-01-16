@@ -2103,6 +2103,11 @@ def run_tool(
         print(f"[DEBUG] Extracted data keys: {list(extracted_data.keys())}")
         print(f"[DEBUG] Job name: {extracted_data.get('production_info', {}).get('job_name', 'N/A')}")
         print(f"[DEBUG] Crew count: {len(extracted_data.get('crew_list', []))}")
+        # #region agent log
+        with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+            import json, time
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"production_workbook_generator.py:2105","message":"schedule_days after LLM extraction","data":{"schedule_days":extracted_data.get('schedule_days',[]),"count":len(extracted_data.get('schedule_days',[]))},"timestamp":int(time.time()*1000)})+'\n')
+        # #endregion
     except Exception as e:
         print(f"[ERROR] Failed to parse JSON: {e}")
         print(f"[ERROR] Response text: {response_text[:1000]}")
@@ -2115,6 +2120,12 @@ def run_tool(
         enriched_data = enrich_production_data(extracted_data, progress_callback=progress_callback)
     else:
         enriched_data = extracted_data
+    
+    # #region agent log
+    with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
+        import json, time
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"production_workbook_generator.py:2117","message":"schedule_days after enrichment","data":{"schedule_days":enriched_data.get('schedule_days',[]),"count":len(enriched_data.get('schedule_days',[]))},"timestamp":int(time.time()*1000)})+'\n')
+    # #endregion
     
     # Debug: Verify data before generating workbook
     print(f"[DEBUG] Before workbook generation:")
