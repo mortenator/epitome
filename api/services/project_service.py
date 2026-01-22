@@ -857,3 +857,174 @@ async def search_crew_members(
         }
         for cm in crew_members
     ]
+
+
+async def get_project_as_generator_data(
+    db: AsyncSession,
+    project_id: str
+) -> Optional[dict]:
+    """
+    Fetch project from database and transform to format expected by EpitomeWorkbookGenerator.
+
+    This is the reverse of create_project_from_generation() - it reads from DB tables
+    and builds the JSON structure needed for Excel regeneration.
+
+    Returns dict with:
+        - production_info: job_name, client, production_company, job_number
+        - logistics: locations, hospital, weather
+        - schedule_days: array of day info with weather
+        - crew_list: array of crew members
+    """
+    # Fetch project with client relation
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .options(selectinload(Project.client_relation))
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        return None
+
+    # Fetch call sheets
+    sheets_result = await db.execute(
+        select(CallSheet)
+        .where(CallSheet.projectId == project_id)
+        .order_by(CallSheet.dayNumber)
+    )
+    call_sheets = sheets_result.scalars().all()
+
+    # Fetch project crew with RSVPs and crew member details
+    crew_result = await db.execute(
+        select(ProjectCrew)
+        .where(ProjectCrew.projectId == project_id)
+        .options(selectinload(ProjectCrew.crew_member))
+    )
+    project_crew = crew_result.scalars().all()
+
+    # Fetch locations
+    locations_result = await db.execute(
+        select(Location).where(Location.projectId == project_id)
+    )
+    locations = locations_result.scalars().all()
+
+    # Get client name from relation if available
+    client_name = project.client_relation.name if project.client_relation else project.client
+
+    # Build production_info
+    production_info = {
+        "job_name": project.jobName or "Untitled Project",
+        "client": client_name or "TBD",
+        "production_company": "EPITOME",
+        "job_number": project.jobNumber or "TBD",
+    }
+
+    # Build logistics.locations
+    locations_data = []
+    for loc in locations:
+        loc_data = {
+            "name": loc.name or "Location",
+            "address": loc.address or "TBD",
+            "parking": loc.parkingNotes or "TBD",
+        }
+        # Add coordinates if available
+        if loc.latitude and loc.longitude:
+            loc_data["coordinates"] = {
+                "lat": float(loc.latitude),
+                "lng": float(loc.longitude)
+            }
+        if loc.mapLink:
+            loc_data["map_link"] = loc.mapLink
+        locations_data.append(loc_data)
+
+    # If no locations, add a default
+    if not locations_data:
+        locations_data = [{"name": "Location 1", "address": "TBD", "parking": "TBD"}]
+
+    # Build logistics.hospital from first call sheet
+    first_call_sheet = call_sheets[0] if call_sheets else None
+    hospital = {
+        "name": first_call_sheet.nearestHospital if first_call_sheet else "Nearest Hospital",
+        "address": first_call_sheet.hospitalAddress if first_call_sheet else "TBD",
+    }
+
+    # Build logistics.weather from first call sheet
+    weather = {}
+    if first_call_sheet:
+        weather = {
+            "high": f"{first_call_sheet.weatherHigh}F" if first_call_sheet.weatherHigh else "TBD",
+            "low": f"{first_call_sheet.weatherLow}F" if first_call_sheet.weatherLow else "TBD",
+            "sunrise": first_call_sheet.sunrise or "TBD",
+            "sunset": first_call_sheet.sunset or "TBD",
+        }
+    else:
+        weather = {"high": "TBD", "low": "TBD", "sunrise": "TBD", "sunset": "TBD"}
+
+    logistics = {
+        "locations": locations_data,
+        "hospital": hospital,
+        "weather": weather,
+    }
+
+    # Build schedule_days
+    schedule_days = []
+    for cs in call_sheets:
+        day_data = {
+            "day_number": cs.dayNumber,
+            "date": cs.shootDate.strftime("%Y-%m-%d") if cs.shootDate else "TBD",
+            "crew_call": format_time(cs.generalCrewCall) or "07:00 AM",
+            "talent_call": "09:00 AM",  # Default - not stored separately
+            "shoot_call": format_time(cs.firstShot) or "08:00 AM",
+        }
+        # Add day-specific weather
+        if cs.weatherHigh or cs.weatherLow:
+            day_data["weather"] = {
+                "temperature": {
+                    "high": f"{cs.weatherHigh}F" if cs.weatherHigh else "TBD",
+                    "low": f"{cs.weatherLow}F" if cs.weatherLow else "TBD",
+                },
+                "conditions": cs.weatherSummary or "TBD",
+                "sunrise": cs.sunrise or "TBD",
+                "sunset": cs.sunset or "TBD",
+            }
+        schedule_days.append(day_data)
+
+    # If no schedule days, create a default
+    if not schedule_days:
+        schedule_days = [{
+            "day_number": 1,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "crew_call": "07:00 AM",
+            "talent_call": "09:00 AM",
+            "shoot_call": "08:00 AM",
+        }]
+
+    # Build crew_list
+    crew_list = []
+    for crew in project_crew:
+        # Get crew member details if linked
+        name = None
+        email = None
+        phone = None
+        if crew.crew_member:
+            name = f"{crew.crew_member.firstName or ''} {crew.crew_member.lastName or ''}".strip()
+            email = crew.crew_member.email
+            phone = crew.crew_member.phone
+            if not name:
+                name = None
+
+        crew_data = {
+            "department": format_department_name(crew.department),
+            "role": crew.role or "TBD",
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "rate": str(int(crew.dealRate)) if crew.dealRate else "TBD",
+        }
+        crew_list.append(crew_data)
+
+    return {
+        "production_info": production_info,
+        "logistics": logistics,
+        "schedule_days": schedule_days,
+        "crew_list": crew_list,
+    }

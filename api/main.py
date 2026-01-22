@@ -29,6 +29,7 @@ from api.database import get_db, AsyncSessionLocal
 from api.services import (
     create_project_from_generation,
     get_project_for_frontend,
+    get_project_as_generator_data,
     update_crew_rsvp,
     search_crew_members,
     update_call_sheet,
@@ -36,7 +37,7 @@ from api.services import (
     update_location,
 )
 from api.services.chat_service import process_chat_message
-from agents.production_workbook_generator import run_tool
+from agents.production_workbook_generator import run_tool, EpitomeWorkbookGenerator
 
 # Directory setup
 BASE_DIR = Path(__file__).parent.parent
@@ -92,16 +93,25 @@ async def serve_index():
 
 @app.post("/api/generate")
 async def generate_workbook(
-    prompt: str = Form(...),
+    prompt: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
     """
     Start workbook generation. Returns a job_id for progress tracking.
 
     - Accepts multipart form data
-    - prompt: Natural language request
-    - file: Optional CSV/PDF/TXT file for context
+    - prompt: Optional natural language request (can be empty if file is provided)
+    - file: Optional CSV/PDF/TXT/Excel file for context
+    - At least one of prompt or file must be provided
     """
+    # Validate that at least one of prompt or file is provided
+    prompt_value = prompt.strip() if prompt else ""
+    if not prompt_value and not file:
+        raise HTTPException(
+            status_code=400,
+            detail="Either a prompt or a file must be provided"
+        )
+    
     loop = asyncio.get_event_loop()
     job_id = progress_manager.create_job(loop)
 
@@ -178,8 +188,10 @@ async def generate_workbook(
                 file_content = f"[File: {file.filename} - Could not read content]"
 
     # Run generation in background
+    # Use empty string if prompt is None/empty
+    prompt_to_use = prompt_value if prompt_value else ""
     asyncio.create_task(
-        run_generation_task(job_id, prompt, file_content, loop)
+        run_generation_task(job_id, prompt_to_use, file_content, loop)
     )
 
     return {"job_id": job_id, "status": "started"}
@@ -508,6 +520,54 @@ async def update_project_endpoint(
         raise HTTPException(status_code=404, detail="Project not found")
     
     return {"status": "updated", "project_id": project_id}
+
+
+@app.post("/api/project/{project_id}/regenerate")
+async def regenerate_workbook_endpoint(
+    project_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Regenerate Excel workbook from current database state.
+
+    Called after data changes (chat edits, crew updates) to sync the Excel file
+    with the latest project data.
+
+    Returns:
+        - filename: New workbook filename for download
+        - download_url: Full URL path to download the file
+    """
+    # Fetch project data in generator format
+    generator_data = await get_project_as_generator_data(db, project_id)
+    if not generator_data:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        # Generate new workbook
+        temp_filename = f"temp_regen_{project_id[:8]}.xlsx"
+        generator = EpitomeWorkbookGenerator(generator_data, temp_filename)
+        generator.generate()
+
+        # Move to output directory with new timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_filename = f"Epitome_Workbook_{project_id[:8]}_{timestamp}.xlsx"
+        new_path = OUTPUT_DIR / new_filename
+
+        # Move the generated file
+        temp_path = Path(temp_filename)
+        if temp_path.exists():
+            shutil.move(str(temp_path), str(new_path))
+
+        return {
+            "filename": new_filename,
+            "download_url": f"/api/download/{new_filename}",
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to regenerate workbook: {str(e)}"
+        )
 
 
 @app.patch("/api/crew/{crew_id}")
