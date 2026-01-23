@@ -174,7 +174,8 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
       "name": "String",
       "email": "String",
       "phone": "String",
-      "rate": "String"
+      "rate": "String",
+      "working_days": [1, 2, 3]  // Day numbers this crew member works (omit if works all days)
     }
     // ... Populate standard roles (Director, Producer, etc.) with empty names if not found in input
   ]
@@ -186,7 +187,9 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
    - Crew member names, roles, departments, contact information (email, phone), rates
    - Shooting dates, call times, schedule information
    - Location names, addresses, parking information
+   - Per-day crew availability (columns indicating which days each person works)
    - Any other production details mentioned in the file
+   - **Crew Day Availability:** If the input shows crew availability per day (e.g., columns indicating which days each person works, checkmarks, "X" marks, or day numbers), extract this as "working_days" array with day numbers (1, 2, 3, etc.). If no per-day availability is specified, omit the working_days field (crew works all days by default).
 2. **Location Extraction:** CRITICAL - If the user mentions a location in their prompt (e.g., "Oslo Norway", "Los Angeles", "New York", "shoot in London"), you MUST extract it and put it in the "address" field of at least one location. Do NOT use "TBD" for the address if a location is mentioned. Examples:
    - Prompt: "shoot in Oslo Norway" → address: "Oslo, Norway"
    - Prompt: "3 day shoot in Los Angeles" → address: "Los Angeles, CA" or "Los Angeles"
