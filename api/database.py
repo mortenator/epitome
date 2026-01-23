@@ -15,33 +15,6 @@ from sqlalchemy import String, Integer, DateTime, ForeignKey, Numeric, Boolean, 
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from dotenv import load_dotenv
 
-# ==== DEBUG: Log all environment variables at container startup ====
-# This runs BEFORE load_dotenv() to see what Railway passes to the container
-import sys
-print("=" * 60, file=sys.stderr)
-print("DEBUG: Environment variables at container startup", file=sys.stderr)
-print("=" * 60, file=sys.stderr)
-for key in sorted(os.environ.keys()):
-    # Mask sensitive values but show they exist
-    value = os.environ[key]
-    if any(secret in key.upper() for secret in ['PASSWORD', 'SECRET', 'KEY', 'TOKEN']):
-        masked = value[:4] + '***' if len(value) > 4 else '***'
-        print(f"  {key}={masked}", file=sys.stderr)
-    elif 'URL' in key.upper() or 'DATABASE' in key.upper():
-        # Show database URLs exist but mask credentials
-        if '@' in value:
-            # Mask password in URL
-            masked = value.split('@')[0][:20] + '***@' + value.split('@')[-1][:30] + '...'
-        else:
-            masked = value[:50] + '...' if len(value) > 50 else value
-        print(f"  {key}={masked}", file=sys.stderr)
-    else:
-        print(f"  {key}={value[:100]}", file=sys.stderr)
-print("=" * 60, file=sys.stderr)
-print(f"Total env vars: {len(os.environ)}", file=sys.stderr)
-print("=" * 60, file=sys.stderr)
-# ==== END DEBUG ====
-
 load_dotenv()
 
 # Get database URLs - prefer DIRECT_URL for asyncpg (avoids pgbouncer issues)
