@@ -7,12 +7,20 @@ Now that your Railway deployment is working, here's how to create preview links 
 1. Go to [railway.app](https://railway.app) → Your **Epitome** project
 2. Click **Settings** (gear icon in the top right)
 3. Click **GitHub** in the left sidebar
-4. Click **Connect Repository**
-5. Select your GitHub repository (`mortenator/epitome` or similar)
-6. **Enable "Deploy Pull Requests"** toggle
+4. **If repository not connected:**
+   - Click **Connect Repository**
+   - Select your GitHub repository (`mortenator/epitome` or similar)
+   - Authorize Railway to access your repo
+5. **Enable "Deploy Pull Requests"** toggle (make sure it's ON/green)
+6. **Enable "Comment on Pull Requests"** (if available) - This makes Railway bot comment on PRs
 7. Click **Save**
 
 That's it! Now every PR will automatically get a preview deployment.
+
+> **Note**: If you don't see the GitHub settings, you might need to:
+> - Make sure you're the project owner/admin
+> - Check that Railway GitHub app is installed in your GitHub account
+> - Go to GitHub → Settings → Applications → Installed GitHub Apps → Find "Railway"
 
 ## Step 2: Create a Preview (For Each Feature)
 
@@ -36,9 +44,20 @@ That's it! Now every PR will automatically get a preview deployment.
    - Fill in PR details
    - Click "Create pull request"
 
-4. **Railway automatically creates a preview!**
-   - Railway bot will comment on your PR with the preview URL
-   - Or check Railway dashboard → Deployments → Find the PR deployment
+4. **Find your preview URL:**
+
+   **In Railway Dashboard:**
+   - Go to Railway dashboard → Your **Epitome** project
+   - Look for **"Deployments"** section or tab (usually at the top)
+   - Find the deployment for your branch (look for `feature/my-feature-name` or PR number)
+   - Click on the deployment card
+   - Look for **"Domain"** or **"URL"** - this is your preview link!
+   - Example: `epitome-pr-123.up.railway.app` or `epitome-feature-my-feature-name.up.railway.app`
+
+   **Alternative locations:**
+   - Click on your **Service** (the main service card)
+   - Look for **"Domains"** section
+   - Preview deployments appear as separate domains
 
 5. **Share the preview URL** - Anyone can view it, no login required!
 
