@@ -20,12 +20,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy frontend source and build
-# Copy all frontend files at once (simpler and works with submodules)
+# Copy package files first for Docker layer caching
+COPY frontend_source/package.json frontend_source/package-lock.json ./frontend_source/
+WORKDIR /app/frontend_source
+# Install dependencies
+RUN npm install
+# Copy rest of frontend source (after npm install for better caching)
+WORKDIR /app
 COPY frontend_source/ ./frontend_source/
 WORKDIR /app/frontend_source
-# Use npm install (works with or without package-lock.json)
-# npm ci is faster but requires exact package-lock.json match
-RUN npm install
+# Build frontend
 RUN npm run build
 
 # Copy built frontend to static directory
