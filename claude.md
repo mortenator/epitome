@@ -31,7 +31,7 @@ This document outlines best-in-class practices for working with Claude on code p
 | **Frontend** | React + TypeScript + Vite + Tailwind CSS |
 | **AI/LLM** | Google Gemini (extraction + chat) |
 | **Excel Generation** | xlsxwriter |
-| **Data Enrichment** | Google Maps API, Open-Meteo API, logo.dev API |
+| **Data Enrichment** | Google Maps API, Google Weather API, Google Places API, logo.dev API |
 
 ### System Architecture
 
@@ -350,11 +350,13 @@ When asking Claude to work on Epitome code, provide context about:
 
 **Data enrichment:**
 1. Enrichment happens in `agents/enrichment.py`
-2. Supports geocoding (Google Maps), weather (Open-Meteo), logos (logo.dev)
+2. Supports geocoding (Google Maps), weather (Google Weather API), hospital lookup (Google Places), logos (logo.dev)
 3. Runs in parallel for performance
 4. Caches results to avoid duplicate API calls
 5. Weather data requires valid YYYY-MM-DD dates (validated before API calls)
-6. Forecasts limited to 16 days ahead (Open-Meteo limitation)
+6. Forecasts limited to 10 days ahead (Google Weather API limitation)
+7. Sunrise/sunset times are converted to local timezone using the location's timezone ID
+8. Nearest hospital is automatically found based on filming location coordinates
 
 **Frontend Integration:**
 1. Frontend is in separate repository (`frontend_source/`)
@@ -499,7 +501,7 @@ When working with Claude on code, always:
 - **Data deduplication**: Crew members are auto-deduplicated to prevent duplicates
 - **Client data**: Use the `clients` table for client management, not the legacy `projects.client` string
 
-## Recent Features (January 2025)
+## Recent Features (January 2025/2026)
 
 ### Chat Functionality
 - **LLM-Powered Chat**: Interactive chat panel for Q&A and edit commands
@@ -521,16 +523,34 @@ When working with Claude on code, always:
 
 ### Data Enrichment
 - **Geocoding**: Automatic coordinate lookup for locations (Google Maps API)
-- **Weather Data**: Forecast and historical weather (Open-Meteo API)
+- **Weather Data**: Forecast weather with proper timezone conversion (Google Weather API)
+- **Hospital Lookup**: Nearest hospital found via Google Places API based on filming location
 - **Date Validation**: Prevents malformed dates from breaking weather API calls
 - **Parallel Processing**: Multiple API calls run concurrently for performance
 - **Caching**: Results cached to minimize API calls
+- **Timezone Support**: Sunrise/sunset times converted to local timezone using location's timezone ID
+
+### Call Sheet Generation
+- **Balanced Crew Grid**: Greedy bin-packing algorithm distributes departments between left/right columns for visual balance
+- **Anchor Departments**: Production and Camera always stay on the left column (traditional call sheet order)
+- **Talent Call Times**: Cast and Talent departments use `talent_call` time; other departments use `crew_call`
+- **Dynamic Layout**: Grid height adjusts based on crew count, footer sections move up accordingly
+- **Department Grouping**: Crew automatically grouped by department with headers
 
 ### UI Improvements
 - **Chat Panel**: Fixed form submission and Enter key handling
 - **Input Overflow**: Fixed input boxes extending beyond card boundaries
 - **Layout Stability**: Prevented text jumping on hover (edit icon space reservation)
 - **Height Management**: Proper flexbox layout for full-height panels
+
+### Call Sheet Layout (January 2026)
+- **Balanced Crew Grid**: Replaced hardcoded department list with greedy bin-packing algorithm
+  - Departments distributed between left/right columns for visual balance (e.g., 20 vs 18 rows instead of 44 vs 0)
+  - Production and Camera anchored to left column (traditional call sheet order)
+  - Remaining departments sorted by size and assigned to column with fewer rows
+- **Talent Call Times**: Cast members now correctly receive talent call time instead of crew call time
+- **Hospital Enrichment**: Nearest hospital automatically populated using Google Places API
+- **Weather Timezone Fix**: Sunrise/sunset times now display in local timezone (not UTC)
 
 ---
 
