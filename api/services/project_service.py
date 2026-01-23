@@ -22,6 +22,7 @@ from api.database import (
     ProjectCrew,
     ScheduleEvent,
 )
+from agents.enrichment import get_company_logo
 
 # =============================================================================
 # Department Mapping
@@ -601,13 +602,17 @@ async def get_project_for_frontend(
 
     # Get client name from relation if available, otherwise fall back to legacy field
     client_name = project.client_relation.name if project.client_relation else project.client
-    
+
+    # Get client logo URL
+    client_logo_url = get_company_logo(client_name)
+
     response_data = {
         "project": {
             "id": project.id,
             "jobName": project.jobName,
             "jobNumber": project.jobNumber,
             "client": client_name,
+            "clientLogoUrl": client_logo_url,
             "agency": project.agency,
         },
         "callSheets": [

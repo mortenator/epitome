@@ -1211,7 +1211,12 @@ class EpitomeWorkbookGenerator:
         row = HEADER_ROW
 
         # --- CREW DATA PREPARATION ---
-        crew = self.data.get('crew_list', [])
+        all_crew = self.data.get('crew_list', [])
+        day_number = day_info.get('day_number', 1)
+
+        # Filter crew by day availability
+        crew = self._filter_crew_by_day(all_crew, day_number)
+
         crew_call = day_info.get('crew_call', 'TBD')
         talent_call = day_info.get('talent_call', 'TBD')
 
@@ -1320,6 +1325,32 @@ class EpitomeWorkbookGenerator:
                 total += 1  # Department header row
             total += 1  # Crew member row
         return total
+
+    def _filter_crew_by_day(self, crew: list, day_number: int) -> list:
+        """Filter crew to only those working on the specified day.
+
+        If a crew member has 'working_days' field, only include them if
+        day_number is in their working_days list. If no working_days
+        specified, include them (assumes they work all days).
+
+        Args:
+            crew: List of crew member dicts
+            day_number: The day number to filter for (1, 2, 3, etc.)
+
+        Returns:
+            Filtered list of crew members available for this day
+        """
+        filtered = []
+        for person in crew:
+            working_days = person.get('working_days')
+            if working_days is None:
+                # No restriction - works all days
+                filtered.append(person)
+            elif day_number in working_days:
+                # Has restriction and works this day
+                filtered.append(person)
+            # else: has restriction and doesn't work this day - skip
+        return filtered
 
     def _group_crew_by_department(self, crew: list) -> dict:
         """Group crew members by department and count rows per department.
