@@ -34,6 +34,9 @@ class EpitomeWorkbookGenerator:
         self.workbook = xlsxwriter.Workbook(self.output_filename)
         self.formats = {}
 
+        # Departments that should always stay on the left column (traditional call sheet order)
+        self.ANCHOR_LEFT_DEPARTMENTS = ['production', 'camera']
+
         # Define standard Layout/Styles
         self._init_formats()
 
@@ -1212,18 +1215,9 @@ class EpitomeWorkbookGenerator:
         crew_call = day_info.get('crew_call', 'TBD')
         talent_call = day_info.get('talent_call', 'TBD')
 
-        # Separate crew into left (production/camera/grip) and right (talent/vanity)
-        right_departments = ['Talent', 'Vanity', 'H/MU', 'Wardrobe', 'Hair', 'Makeup', 'Management', 'MGMT', 'Production Support']
-
-        left_crew = []
-        right_crew = []
-
-        for person in crew:
-            dept = person.get('department', 'Production')
-            if any(d.lower() in dept.lower() for d in right_departments):
-                right_crew.append(person)
-            else:
-                left_crew.append(person)
+        # Use balanced distribution algorithm to split crew between left and right columns
+        department_groups = self._group_crew_by_department(crew)
+        left_crew, right_crew = self._distribute_departments_balanced(department_groups)
 
         # If no crew data, use default template (matches sample file)
         if not crew:
@@ -1324,6 +1318,75 @@ class EpitomeWorkbookGenerator:
                 total += 1  # Department header row
             total += 1  # Crew member row
         return total
+
+    def _group_crew_by_department(self, crew: list) -> dict:
+        """Group crew members by department and count rows per department.
+
+        Returns:
+            dict: {department_name: {'crew': [list of crew], 'row_count': int}}
+                  row_count = 1 (header) + len(crew members)
+        """
+        groups = {}
+        for person in crew:
+            dept = person.get('department', 'Production')
+            if dept not in groups:
+                groups[dept] = {'crew': [], 'row_count': 1}  # 1 for header
+            groups[dept]['crew'].append(person)
+            groups[dept]['row_count'] += 1
+        return groups
+
+    def _is_anchor_department(self, dept_name: str) -> bool:
+        """Check if a department should be anchored to the left column.
+
+        Production and Camera traditionally appear on the left side of call sheets.
+        """
+        return dept_name.lower() in self.ANCHOR_LEFT_DEPARTMENTS
+
+    def _distribute_departments_balanced(self, department_groups: dict) -> tuple:
+        """Distribute departments between left and right columns using greedy bin-packing.
+
+        Algorithm:
+        1. Anchor Production and Camera to the left (traditional call sheet order)
+        2. Sort remaining departments by size (descending)
+        3. Greedily assign each department to the column with fewer rows
+
+        Returns:
+            tuple: (left_crew, right_crew) - flat lists of crew members
+        """
+        left_crew = []
+        right_crew = []
+        left_rows = 0
+        right_rows = 0
+
+        # Separate anchor and flexible departments
+        anchor_depts = []
+        flexible_depts = []
+
+        for dept_name, data in department_groups.items():
+            if self._is_anchor_department(dept_name):
+                anchor_depts.append((dept_name, data))
+            else:
+                flexible_depts.append((dept_name, data))
+
+        # Assign anchor departments to left (in order: production first, then camera)
+        anchor_depts.sort(key=lambda x: 0 if x[0].lower() == 'production' else 1)
+        for dept_name, data in anchor_depts:
+            left_crew.extend(data['crew'])
+            left_rows += data['row_count']
+
+        # Sort flexible departments by row count (descending) for better balancing
+        flexible_depts.sort(key=lambda x: x[1]['row_count'], reverse=True)
+
+        # Greedy assignment: assign each department to the column with fewer rows
+        for dept_name, data in flexible_depts:
+            if left_rows <= right_rows:
+                left_crew.extend(data['crew'])
+                left_rows += data['row_count']
+            else:
+                right_crew.extend(data['crew'])
+                right_rows += data['row_count']
+
+        return left_crew, right_crew
 
     def _write_dept_header_left(self, ws, row: int, dept_name: str, is_last: bool = False, grid_end_row: int = 0):
         """Write department header for left section (A-F) with borders.
