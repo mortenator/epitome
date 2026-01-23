@@ -49,6 +49,14 @@ if db_url:
     if "?pgbouncer=true" in db_url:
         db_url = db_url.replace("?pgbouncer=true", "")
 
+# Validate database URL before creating engine
+if not db_url:
+    import sys
+    print("ERROR: No database URL configured", file=sys.stderr)
+    print(f"  DATABASE_URL set: {bool(os.getenv('DATABASE_URL'))}", file=sys.stderr)
+    print(f"  DIRECT_URL set: {bool(os.getenv('DIRECT_URL'))}", file=sys.stderr)
+    raise RuntimeError("DATABASE_URL environment variable is required")
+
 # Create async engine with statement cache disabled (for pgbouncer compatibility)
 engine = create_async_engine(
     db_url,
@@ -56,7 +64,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     connect_args={
         "statement_cache_size": 0,  # Disable prepared statement caching for pgbouncer
-    } if db_url else {},
+    },
 )
 
 # Create async session factory
