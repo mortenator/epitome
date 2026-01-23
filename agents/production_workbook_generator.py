@@ -1105,13 +1105,15 @@ class EpitomeWorkbookGenerator:
         if logo_url:
             logo_data = self._download_logo(logo_url)
             if logo_data:
-                # Insert logo in cell E4, scaled to fit within the cell
-                ws.insert_image('E4', 'logo.jpg', {
+                # Insert logo in cell C4 (within CLIENT section)
+                # Compensate for cell aspect ratio to maintain 1:1 logo appearance
+                # Cell dimensions cause ~1.27x height stretch, so increase x_scale
+                ws.insert_image('C4', 'logo.jpg', {
                     'image_data': logo_data,
-                    'x_scale': 0.3,
-                    'y_scale': 0.3,
-                    'x_offset': 2,
-                    'y_offset': 2,
+                    'x_scale': 0.20,
+                    'y_scale': 0.25,
+                    'x_offset': 70,
+                    'y_offset': 5,
                     'positioning': 1  # Move and size with cells
                 })
 
