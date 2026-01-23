@@ -1080,11 +1080,18 @@ async def get_project_as_generator_data(
         }
         crew_list.append(crew_data)
 
+    # Get client logo URL
+    client_info = {
+        "name": client_name,
+        "logo_url": get_company_logo(client_name) if client_name else None,
+    }
+
     return {
         "production_info": production_info,
         "logistics": logistics,
         "schedule_days": schedule_days,
         "crew_list": crew_list,
+        "client_info": client_info,
     }
 
 

@@ -7,6 +7,8 @@ import xlsxwriter
 import json
 import os
 import re
+import urllib.request
+from io import BytesIO
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -854,6 +856,22 @@ class EpitomeWorkbookGenerator:
             'border_color': '#000000'
         })
 
+    def _download_logo(self, logo_url: str) -> Optional[BytesIO]:
+        """
+        Download a logo image from URL and return as BytesIO object.
+        Returns None if download fails.
+        """
+        if not logo_url:
+            return None
+        try:
+            with urllib.request.urlopen(logo_url, timeout=10) as response:
+                if response.status == 200:
+                    image_data = BytesIO(response.read())
+                    return image_data
+        except Exception as e:
+            print(f"Warning: Failed to download logo from {logo_url}: {e}")
+        return None
+
     def generate(self):
         """Orchestrates the generation of all sheets matching sample workbook structure."""
         # Core sheets
@@ -1080,6 +1098,22 @@ class EpitomeWorkbookGenerator:
         ws.write('C8', "", self.formats['cs_box_bottomleft'])
         ws.write('D8', "", self.formats['cs_box_bottom'])
         ws.write('E8', "", self.formats['cs_box_bottomright'])
+
+        # Insert client logo if available
+        client_info = self.data.get('client_info', {})
+        logo_url = client_info.get('logo_url')
+        if logo_url:
+            logo_data = self._download_logo(logo_url)
+            if logo_data:
+                # Insert logo in cell E4, scaled to fit within the cell
+                ws.insert_image('E4', 'logo.jpg', {
+                    'image_data': logo_data,
+                    'x_scale': 0.3,
+                    'y_scale': 0.3,
+                    'x_offset': 2,
+                    'y_offset': 2,
+                    'positioning': 1  # Move and size with cells
+                })
 
         # === SECTION F3:G8 (Filming Location) - thin edges ===
         # Row 3 (top of box)
