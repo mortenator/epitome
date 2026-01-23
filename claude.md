@@ -131,6 +131,7 @@ id, jobNumber, jobName, client (legacy string), clientId (FK to clients),
 agency, brand, status,
 bidDate, awardDate, prepStartDate, shootStartDate, shootEndDate, wrapDate,
 insuranceRate, payrollTaxRate, workersCompRate, agencyFeeRate,
+stageName, stageAddress,  // Studio/stage information
 organizationId
 ```
 
@@ -173,7 +174,8 @@ rate, isActive, sectionId
 ```
 id, firstName, lastName, email, phone, address, city, state, zip,
 department, primaryRole, defaultRate, unionStatus, unionLocal,
-loanOutCompany, w9OnFile, skills[], notes, isActive, organizationId
+loanOutCompany, w9OnFile, skills[], notes, isActive, organizationId,
+agentName, agentPhone, agentEmail  // Agent/representative info
 
 Note: Auto-deduplication based on email/phone (unique per organization).
 When creating crew members, system checks for existing records with
@@ -186,7 +188,10 @@ id, role, department, dealRate, dealType (DAY_RATE|WEEKLY_RATE|FLAT_FEE|HOURLY),
 guaranteedDays, kitFee, perDiem, status (HOLD|CONFIRMED|CANCELLED|WRAPPED),
 dealMemoSigned, startDate, endDate,
 dietaryRestrictions, shirtSize, vehicleInfo, notes,
-projectId, crewMemberId, budgetLineId
+projectId, crewMemberId, budgetLineId,
+paymentType (TIMECARD|INVOICE),              // W2 payroll vs 1099 invoice
+onboardingStatus (NOT_STARTED|INVITED|ONBOARDED|NOT_APPLICABLE),
+ndaSigned, btsConsent, isLoanOut, walkieAssigned  // Compliance tracking
 ```
 
 **vendors** - Rental houses, suppliers
@@ -261,7 +266,18 @@ callSheetId, projectCrewId
 ```
 PRODUCTION, CAMERA, GRIP_ELECTRIC, ART, WARDROBE,
 HAIR_MAKEUP, SOUND, LOCATIONS, TRANSPORTATION, CATERING,
-POST_PRODUCTION, OTHER
+POST_PRODUCTION, TALENT, STILLS, VTR, OTHER
+```
+
+### PaymentType Enum
+```
+TIMECARD    // W2 employee, paid via payroll
+INVOICE     // 1099/vendor, submits invoice
+```
+
+### OnboardingStatus Enum
+```
+NOT_STARTED, INVITED, ONBOARDED, NOT_APPLICABLE
 ```
 
 ### Union Status Enum

@@ -167,6 +167,9 @@ model crew_members {
   notes          String?
   isActive       Boolean        @default(true)
   organizationId String
+  agentName      String?
+  agentPhone     String?
+  agentEmail     String?
   organizations  organizations  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project_crew   project_crew[]
 
@@ -240,6 +243,12 @@ model project_crew {
   projectId           String
   crewMemberId        String?
   budgetLineId        String?
+  paymentType         PaymentType        @default(TIMECARD)
+  onboardingStatus    OnboardingStatus   @default(NOT_STARTED)
+  ndaSigned           Boolean            @default(false)
+  btsConsent          Boolean            @default(false)
+  isLoanOut           Boolean            @default(false)
+  walkieAssigned      Boolean            @default(false)
   call_sheet_rsvps    call_sheet_rsvps[]
   budget_lines        budget_lines?      @relation(fields: [budgetLineId], references: [id])
   crew_members        crew_members?      @relation(fields: [crewMemberId], references: [id])
@@ -274,6 +283,8 @@ model projects {
   workersCompRate Decimal?          @db.Decimal(5, 4)
   agencyFeeRate   Decimal?          @db.Decimal(5, 4)
   organizationId  String
+  stageName       String?
+  stageAddress    String?
   budgets         budgets[]
   call_sheets     call_sheets[]
   locations       locations[]
@@ -477,7 +488,22 @@ enum Department {
   TRANSPORTATION
   CATERING
   POST_PRODUCTION
+  TALENT
+  STILLS
+  VTR
   OTHER
+}
+
+enum PaymentType {
+  TIMECARD
+  INVOICE
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  INVITED
+  ONBOARDED
+  NOT_APPLICABLE
 }
 
 enum FringeType {

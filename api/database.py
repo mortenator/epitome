@@ -150,8 +150,22 @@ def generate_cuid() -> str:
 DepartmentEnum = PgEnum(
     'PRODUCTION', 'CAMERA', 'GRIP_ELECTRIC', 'ART', 'WARDROBE',
     'HAIR_MAKEUP', 'SOUND', 'LOCATIONS', 'TRANSPORTATION',
-    'CATERING', 'POST_PRODUCTION', 'OTHER',
+    'CATERING', 'POST_PRODUCTION', 'TALENT', 'STILLS', 'VTR', 'OTHER',
     name='Department',
+    create_type=False
+)
+
+# PaymentType enum
+PaymentTypeEnum = PgEnum(
+    'TIMECARD', 'INVOICE',
+    name='PaymentType',
+    create_type=False
+)
+
+# OnboardingStatus enum
+OnboardingStatusEnum = PgEnum(
+    'NOT_STARTED', 'INVITED', 'ONBOARDED', 'NOT_APPLICABLE',
+    name='OnboardingStatus',
     create_type=False
 )
 
@@ -250,6 +264,9 @@ class Project(Base):
     shootEndDate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     wrapDate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     organizationId: Mapped[str] = mapped_column(String, ForeignKey("organizations.id"), nullable=False)
+    # Stage/studio information
+    stageName: Mapped[str | None] = mapped_column(String, nullable=True)
+    stageAddress: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationships
     organization: Mapped["Organization"] = relationship(back_populates="projects")
@@ -308,6 +325,10 @@ class CrewMember(Base):
     defaultRate: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     unionStatus: Mapped[str] = mapped_column(UnionStatusEnum, default="NON_UNION")
     organizationId: Mapped[str] = mapped_column(String, ForeignKey("organizations.id"), nullable=False)
+    # Agent information
+    agentName: Mapped[str | None] = mapped_column(String, nullable=True)
+    agentPhone: Mapped[str | None] = mapped_column(String, nullable=True)
+    agentEmail: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationships
     organization: Mapped["Organization"] = relationship(back_populates="crew_members")
@@ -335,6 +356,14 @@ class ProjectCrew(Base):
     shirtSize: Mapped[str | None] = mapped_column(String, nullable=True)
     vehicleInfo: Mapped[str | None] = mapped_column(String, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Payment and onboarding fields
+    paymentType: Mapped[str] = mapped_column(PaymentTypeEnum, default="TIMECARD")
+    onboardingStatus: Mapped[str] = mapped_column(OnboardingStatusEnum, default="NOT_STARTED")
+    ndaSigned: Mapped[bool] = mapped_column(Boolean, default=False)
+    btsConsent: Mapped[bool] = mapped_column(Boolean, default=False)
+    isLoanOut: Mapped[bool] = mapped_column(Boolean, default=False)
+    walkieAssigned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
     project: Mapped["Project"] = relationship(back_populates="project_crew")

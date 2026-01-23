@@ -147,7 +147,9 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
     "job_name": "String (default: 'TBD')",
     "client": "String (default: 'TBD')",
     "production_company": "Epitome",
-    "job_number": "String (default: 'EP-001')"
+    "job_number": "String (default: 'EP-001')",
+    "stage_name": "String (optional) - Studio/stage name if mentioned (e.g., 'EUE Screen Gems', 'Hecho Studios')",
+    "stage_address": "String (optional) - Studio/stage address"
   },
   "logistics": {
     "locations": [
@@ -169,13 +171,22 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
   // CRITICAL: Dates MUST be in YYYY-MM-DD format (e.g., "2025-08-28"). Do NOT use formats like "TBD - October 2025" or "TBD - 10".
   "crew_list": [
     {
-      "department": "Camera",
+      "department": "Camera",  // Valid: PRODUCTION, CAMERA, GRIP_ELECTRIC, ART, WARDROBE, HAIR_MAKEUP, SOUND, LOCATIONS, TRANSPORTATION, CATERING, POST_PRODUCTION, TALENT, STILLS, VTR, OTHER
       "role": "Director of Photography",
       "name": "String",
       "email": "String",
       "phone": "String",
       "rate": "String",
-      "working_days": [1, 2, 3]  // Day numbers this crew member works (omit if works all days)
+      "working_days": [1, 2, 3],  // Day numbers this crew member works (omit if works all days)
+      "payment_type": "TIMECARD",  // TIMECARD (W2/payroll) or INVOICE (1099/vendor)
+      "onboarding_status": "NOT_STARTED",  // NOT_STARTED, INVITED, ONBOARDED, NOT_APPLICABLE
+      "nda_signed": false,  // Boolean - true if NDA column shows 'x', 'yes', or checkmark
+      "bts_consent": false,  // Boolean - true if BTS consent column shows 'x', 'yes', or checkmark
+      "is_loan_out": false,  // Boolean - true if Loanout column shows 'yes'
+      "walkie_assigned": false,  // Boolean - true if walkies column shows 'x' or 'yes'
+      "agent_name": "String (optional)",  // Agent/representative name
+      "agent_phone": "String (optional)",  // Agent phone number
+      "agent_email": "String (optional)"  // Agent email
     }
     // ... Populate standard roles (Director, Producer, etc.) with empty names if not found in input
   ]
@@ -184,10 +195,23 @@ Analyze the inputs and produce a JSON object adhering to the schema below.
 ### RULES
 1. **File Extraction Priority:** When a file is attached, extract ALL available information from it. Look for:
    - Production company name, client name, job number, job name
+   - Stage/studio name and address (often in headers like "EUE Screen Gems", "Hecho Studios")
    - Crew member names, roles, departments, contact information (email, phone), rates
    - Shooting dates, call times, schedule information
    - Location names, addresses, parking information
    - Per-day crew availability (columns indicating which days each person works)
+   - **Payment/Onboarding columns:** Look for columns like "Wrapbook Status", "Onboarded", "Invoice", "Payroll Status"
+     - If "Invoice" or similar → payment_type: "INVOICE"
+     - If "Onboarded", "Timecard", "W2" → payment_type: "TIMECARD"
+     - Map status values: "Onboarded" → onboarding_status: "ONBOARDED", "Not Onboarded" → "NOT_STARTED", "n/a" → "NOT_APPLICABLE"
+   - **NDA/BTS columns:** Look for NDA, BTS consent columns with 'x', 'yes', checkmarks indicating signed/consented
+   - **Loan Out columns:** "Loanout?" with Yes/No/TBD values → is_loan_out: true/false
+   - **Walkie columns:** "Walkies" with 'x' or checkmarks → walkie_assigned: true
+   - **Agent columns:** "Agent", "Agent Name", "Agent Phone", "Agent Email" → extract to agent_name, agent_phone, agent_email
+   - **Department mapping for new departments:**
+     - Talent, Cast, Actor → TALENT
+     - Photo, Stills, Photographer → STILLS
+     - VTR, Video Playback, DIT → VTR
    - Any other production details mentioned in the file
    - **Crew Day Availability:** If the input shows crew availability per day (e.g., columns indicating which days each person works, checkmarks, "X" marks, or day numbers), extract this as "working_days" array with day numbers (1, 2, 3, etc.). If no per-day availability is specified, omit the working_days field (crew works all days by default).
 2. **Location Extraction:** CRITICAL - If the user mentions a location in their prompt (e.g., "Oslo Norway", "Los Angeles", "New York", "shoot in London"), you MUST extract it and put it in the "address" field of at least one location. Do NOT use "TBD" for the address if a location is mentioned. Examples:
