@@ -1,0 +1,13 @@
+# Ignore files that shouldn't be deployed
+output/
+*.xlsx
+*.xls
+.env
+.env.local
+__pycache__/
+*.pyc
+.cursor/
+debug.log
+node_modules/
+venv/
+.venv/
