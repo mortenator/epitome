@@ -34,9 +34,13 @@ RUN mkdir -p static && cp -r frontend_source/dist/* static/
 # Copy the rest of the application
 COPY . .
 
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Expose port (Railway sets PORT env var)
 ENV PORT=8000
 EXPOSE 8000
 
-# Start the application (use shell form to expand $PORT)
-CMD sh -c "python -m uvicorn api.main:app --host 0.0.0.0 --port \${PORT:-8000}"
+# Start the application using the startup script
+CMD ["/app/start.sh"]
