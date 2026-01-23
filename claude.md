@@ -536,6 +536,7 @@ When working with Claude on code, always:
 - **Talent Call Times**: Cast and Talent departments use `talent_call` time; other departments use `crew_call`
 - **Dynamic Layout**: Grid height adjusts based on crew count, footer sections move up accordingly
 - **Department Grouping**: Crew automatically grouped by department with headers
+- **Per-Day Crew Filtering**: When input files have day availability columns (TRUE/FALSE per day), each call sheet shows only crew working that day
 
 ### UI Improvements
 - **Chat Panel**: Fixed form submission and Enter key handling
@@ -551,6 +552,12 @@ When working with Claude on code, always:
 - **Talent Call Times**: Cast members now correctly receive talent call time instead of crew call time
 - **Hospital Enrichment**: Nearest hospital automatically populated using Google Places API
 - **Weather Timezone Fix**: Sunrise/sunset times now display in local timezone (not UTC)
+- **Per-Day Crew Filtering**: Call sheets now filter crew by day availability
+  - Input files with day availability columns (e.g., TRUE/FALSE per shoot day) are parsed during extraction
+  - LLM extracts `working_days` array for each crew member (e.g., `[1, 2, 3]` for days 1-3)
+  - `_filter_crew_by_day()` method filters crew list when generating each day's call sheet
+  - Crew without `working_days` restriction appear on all days (backward compatible)
+  - Example: 121 crew total → Day 1: 32, Day 2: 49, Day 3: 69, Day 4: 80 based on availability
 
 ---
 
