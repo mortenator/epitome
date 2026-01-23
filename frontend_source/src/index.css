@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-size: 16px;
+    --background: 0 0% 98%;
+    --foreground: 220 9% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 9% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 9% 8%;
+
+    --primary: 240 5% 5%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 240 5% 5%;
+
+    --muted: 220 9% 94%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 215 20% 93%;
+    --accent-foreground: 240 5% 5%;
+
+    --destructive: 351 82% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 9% 90%;
+    --input: 0 0% 100%;
+    --input-background: 220 9% 95%;
+    --ring: 220 9% 46%;
+
+    --radius: 0.625rem;
+
+    /* Sidebar */
+    --sidebar: 210 29% 95%;
+    --sidebar-foreground: 220 9% 8%;
+    --sidebar-primary: 240 5% 5%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 220 9% 8%;
+    --sidebar-border: 210 29% 95%;
+    --sidebar-ring: 217 91% 60%;
+
+    /* Custom Epitome colors */
+    --epitome-blue: 212 75% 60%;
+    --epitome-blue-light: 202 100% 93%;
+    --nav-inactive: 220 6% 64%;
+    --nav-active: 220 9% 8%;
+    --badge-bg: 220 9% 12%;
+
+    /* Gradient for upgrade card */
+    --gradient-upgrade-start: 207 78% 63%;
+    --gradient-upgrade-mid: 207 77% 63%;
+    --gradient-upgrade-end: 197 100% 71%;
+    --gradient-upgrade-bottom: 195 100% 93%;
+  }
+
+  .dark {
+    --background: 220 9% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 220 9% 8%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 220 9% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 220 9% 12%;
+
+    --secondary: 220 6% 17%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 220 6% 17%;
+    --muted-foreground: 220 6% 70%;
+
+    --accent: 220 6% 17%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 6% 17%;
+    --input: 220 6% 17%;
+    --ring: 220 6% 44%;
+
+    --sidebar: 220 9% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 217 91% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 6% 17%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 220 6% 17%;
+    --sidebar-ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1 {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    @apply text-4xl font-normal tracking-tight;
+  }
+
+  h2 {
+    @apply text-xl font-medium;
+  }
+
+  h3 {
+    @apply text-lg font-medium;
+  }
+}
+
+@layer utilities {
+  .text-nav-inactive {
+    color: hsl(var(--nav-inactive));
+  }
+
+  .text-nav-active {
+    color: hsl(var(--nav-active));
+  }
+
+  .bg-upgrade-gradient {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--gradient-upgrade-start)) 0%,
+      hsl(var(--gradient-upgrade-mid)) 61.538%,
+      hsl(var(--gradient-upgrade-end)) 84.135%,
+      hsl(var(--gradient-upgrade-bottom)) 100%
+    );
+  }
+
+  .bg-epitome-blue {
+    background-color: hsl(var(--epitome-blue));
+  }
+}

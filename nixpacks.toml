@@ -1,0 +1,21 @@
+# Nixpacks configuration for Railway
+# This tells Railway how to build your app
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "python311"]
+
+[phases.install]
+cmds = [
+  "cd frontend_source && npm ci",
+  "pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = [
+  "cd frontend_source && npm run build",
+  "mkdir -p ../static",
+  "cp -r frontend_source/dist/* static/"
+]
+
+[start]
+cmd = "python -m uvicorn api.main:app --host 0.0.0.0 --port $PORT"
