@@ -312,10 +312,14 @@ async def stream_progress(job_id: str):
 
     async def event_generator():
         try:
+            # Send immediate "connected" event to establish the stream
+            connected_event = ProgressEvent("connected", 0, "Connected to progress stream")
+            yield connected_event.to_sse()
+
             while True:
                 try:
-                    # Wait for next event with timeout
-                    event = await asyncio.wait_for(queue.get(), timeout=120.0)
+                    # Wait for next event with shorter timeout for more frequent keepalives
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
                     yield event.to_sse()
 
                     # Check if error or download ready (don't break on 'complete' - wait for download_ready)
@@ -323,7 +327,7 @@ async def stream_progress(job_id: str):
                         break
 
                 except asyncio.TimeoutError:
-                    # Send keepalive comment
+                    # Send keepalive comment to prevent proxy timeout
                     yield ": keepalive\n\n"
 
         except asyncio.CancelledError:
@@ -336,9 +340,10 @@ async def stream_progress(job_id: str):
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream",
         }
     )
 
