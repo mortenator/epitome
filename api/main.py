@@ -222,6 +222,7 @@ async def run_generation_task(
         )
 
         # Move workbook to output directory with unique name
+        progress_callback("saving_file", 92, "Saving workbook file...")
         original_path = Path(result['workbook_path'])
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         new_filename = f"Epitome_Workbook_{job_id[:8]}_{timestamp}.xlsx"
@@ -234,6 +235,7 @@ async def run_generation_task(
         result['download_filename'] = new_filename
 
         # Save to database
+        progress_callback("saving_database", 95, "Saving to database...")
         project_id = None
         try:
             enriched_data = result.get('data', {})
@@ -274,6 +276,9 @@ async def run_generation_task(
             print(f"[DB DEBUG] Stored enriched data in result (fallback mode, job_id: {job_id})")
         
         progress_manager.set_result(job_id, result)
+
+        # Final ready stage
+        progress_callback("ready", 99, "Your call sheet is ready!")
 
         # Send download ready event with project_id and job_id (for fallback)
         download_event = ProgressEvent(

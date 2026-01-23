@@ -617,7 +617,11 @@ def enrich_production_data(
             addresses_to_geocode.append((i, address))
 
     # PARALLEL EXECUTION: Run all independent API calls together
-    emit("geocoding", 50, "Fetching location & client data...")
+    location_count = len(addresses_to_geocode)
+    if location_count > 0:
+        emit("enriching_location", 72, f"Geocoding {location_count} location{'s' if location_count != 1 else ''}...")
+    else:
+        emit("enriching_location", 72, "Checking location data...")
 
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {}
@@ -628,19 +632,26 @@ def enrich_production_data(
 
         # Submit client info tasks (if client exists)
         if client_name:
+            emit("enriching_logo", 74, f"Looking up {client_name} logo...")
             futures[executor.submit(get_company_logo, client_name)] = ('logo', None)
             futures[executor.submit(get_client_research, client_name)] = ('research', None)
 
         # Collect geocoding results
         coords_results = {}
+        geocoded_count = 0
         for future in as_completed(futures):
             task_type, task_index = futures[future]
             try:
                 result = future.result()
                 if task_type == 'geocode' and result:
                     coords_results[task_index] = result
+                    geocoded_count += 1
+                    if location_count > 1:
+                        emit("enriching_location", 72 + (geocoded_count * 2 // location_count), f"Geocoded {geocoded_count}/{location_count} locations...")
                 elif task_type == 'logo':
                     enriched['client_info']['logo_url'] = result
+                    if result:
+                        emit("enriching_logo", 76, "Found company logo")
                 elif task_type == 'research':
                     enriched['client_info']['research'] = result
             except Exception as e:
@@ -679,7 +690,8 @@ def enrich_production_data(
             print(f"Warning: Primary coordinates are not valid numbers. Cannot fetch weather data.")
             print(f"  lat: {lat} (type: {type(lat)}), lng: {lng} (type: {type(lng)})")
         else:
-            emit("weather", 70, "Fetching weather data...")
+            days_count = len(schedule_days)
+            emit("enriching_weather", 78, f"Fetching weather for {days_count} day{'s' if days_count != 1 else ''}...")
 
             # Filter and validate dates - only include properly formatted YYYY-MM-DD dates
             def is_valid_date(date_str: str) -> bool:
@@ -747,10 +759,12 @@ def enrich_production_data(
         lat = primary_coords.get('lat')
         lng = primary_coords.get('lng')
         if lat is not None and lng is not None:
+            emit("enriching_location", 84, "Finding nearest hospital...")
             hospital = find_nearest_hospital(lat, lng)
             if hospital:
                 enriched['logistics']['hospital'] = hospital
+                emit("enriching_location", 86, f"Found {hospital.get('name', 'hospital')}")
 
-    emit("research", 85, "Finalizing enrichment...")
+    emit("enrichment_complete", 88, "Enrichment complete")
 
     return enriched
