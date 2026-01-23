@@ -610,22 +610,32 @@ async def search_crew(
 async def chat_endpoint(
     project_id: str = Form(...),
     message: str = Form(...),
+    history: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Chat endpoint for asking questions and executing edit commands.
-    
+
     Accepts:
     - project_id: The project ID to chat about
     - message: User's message/question/command
-    
+    - history: JSON string of conversation history (optional)
+
     Returns:
     - type: "answer" or "edit"
     - response: Text response to show user
     - action: (if edit) The action that was executed
     - success: (if edit) Whether the edit was successful
     """
-    result = await process_chat_message(db, project_id, message)
+    # Parse history from JSON string
+    history_list = []
+    if history:
+        try:
+            history_list = json.loads(history)
+        except json.JSONDecodeError:
+            pass  # Ignore malformed history
+
+    result = await process_chat_message(db, project_id, message, history_list)
     return result
 
 

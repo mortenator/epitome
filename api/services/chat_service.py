@@ -32,11 +32,18 @@ except ImportError:
 async def process_chat_message(
     db: AsyncSession,
     project_id: str,
-    message: str
+    message: str,
+    history: list = None
 ) -> Dict[str, Any]:
     """
     Process a chat message using Gemini API.
-    
+
+    Args:
+        db: Database session
+        project_id: The project ID
+        message: Current user message
+        history: List of previous conversation messages (optional)
+
     Returns:
         Dict with 'type' ('answer' or 'edit'), 'response', and optionally 'action' and 'parameters'
     """
@@ -47,15 +54,18 @@ async def process_chat_message(
             "type": "answer",
             "response": "Sorry, I couldn't find the project. Please check the project ID."
         }
-    
+
     # Build context string from project data
     context = _build_project_context(project_data)
-    
+
+    # Build conversation history string
+    conversation_context = _build_conversation_history(history or [])
+
     # Build user prompt with context
     user_prompt = f"""Project Context:
 {context}
 
-User Message: {message}
+{conversation_context}User Message: {message}
 
 Please respond with valid JSON only, no markdown formatting."""
     
@@ -139,7 +149,7 @@ Please respond with valid JSON only, no markdown formatting."""
 def _build_project_context(project_data: Dict[str, Any]) -> str:
     """Build a context string from project data for the LLM."""
     lines = []
-    
+
     # Project info
     proj = project_data.get("project", {})
     lines.append(f"Project: {proj.get('jobName', 'N/A')} ({proj.get('jobNumber', 'N/A')})")
@@ -147,7 +157,7 @@ def _build_project_context(project_data: Dict[str, Any]) -> str:
     if proj.get("agency"):
         lines.append(f"Agency: {proj.get('agency')}")
     lines.append("")
-    
+
     # Call sheets
     call_sheets = project_data.get("callSheets", [])
     if call_sheets:
@@ -161,7 +171,7 @@ def _build_project_context(project_data: Dict[str, Any]) -> str:
                 lines.append(f"    Hospital: {cs.get('hospital', {}).get('name')} - {cs.get('hospital', {}).get('address', '')}")
             lines.append(f"    ID: {cs.get('id')}")
         lines.append("")
-    
+
     # Locations
     locations = project_data.get("locations", [])
     if locations:
@@ -170,7 +180,7 @@ def _build_project_context(project_data: Dict[str, Any]) -> str:
             lines.append(f"  {loc.get('name', 'N/A')}: {loc.get('address', 'N/A')}")
             lines.append(f"    ID: {loc.get('id')}")
         lines.append("")
-    
+
     # Crew by department
     departments = project_data.get("departments", [])
     if departments:
@@ -186,8 +196,31 @@ def _build_project_context(project_data: Dict[str, Any]) -> str:
                 lines.append(crew_info)
                 lines.append(f"      ID: {crew.get('id')}")
         lines.append("")
-    
+
     return "\n".join(lines)
+
+
+def _build_conversation_history(history: list) -> str:
+    """Build conversation history string for the prompt.
+
+    Args:
+        history: List of message dicts with 'role' ('user'/'assistant') and 'content'
+
+    Returns:
+        Formatted string of previous conversation, or empty string if no history
+    """
+    if not history:
+        return ""
+
+    lines = ["Previous Conversation:"]
+    # Limit to last 6 messages to avoid token limits
+    recent_history = history[-6:]
+    for msg in recent_history:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        lines.append(f"{role}: {msg.get('content', '')}")
+    lines.append("")  # Empty line before current message
+
+    return "\n".join(lines) + "\n"
 
 
 def _extract_json_from_response(response_text: str) -> str:
