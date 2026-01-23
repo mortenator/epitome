@@ -559,6 +559,7 @@ When working with Claude on code, always:
 - **Input Overflow**: Fixed input boxes extending beyond card boundaries
 - **Layout Stability**: Prevented text jumping on hover (edit icon space reservation)
 - **Height Management**: Proper flexbox layout for full-height panels
+- **Weather Card**: Subtle light gradients for all conditions (sunny, cloudy, rain) and night variants; temperature displays with °F unit
 
 ### Call Sheet Layout (January 2026)
 - **Balanced Crew Grid**: Replaced hardcoded department list with greedy bin-packing algorithm
@@ -574,6 +575,11 @@ When working with Claude on code, always:
   - `_filter_crew_by_day()` method filters crew list when generating each day's call sheet
   - Crew without `working_days` restriction appear on all days (backward compatible)
   - Example: 121 crew total → Day 1: 32, Day 2: 49, Day 3: 69, Day 4: 80 based on availability
+- **Weather Card Styling**: Redesigned weather card with subtle, consistent styling
+  - All conditions (Sunny, Cloudy, Rain) use light pastel gradients instead of dark backgrounds
+  - Night variants also use subtle light gradients for consistency
+  - Temperature now displays with °F unit (e.g., "33°F" instead of "33°")
+  - Weather conditions mapped from API responses (e.g., "Overcast" → "Cloudy")
 
 ---
 
