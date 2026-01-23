@@ -10,7 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
+# Ignore Python lib/ but NOT frontend_source/src/lib/
 lib/
+!frontend_source/src/lib/
 lib64/
 parts/
 sdist/
