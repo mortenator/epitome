@@ -22,7 +22,11 @@ except ImportError:
     pass
 
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
-LOGO_DEV_API_KEY = os.environ.get('LOGO_DEV_API_KEY')
+# logo.dev has two key types:
+# - Publishable key (pk_...): For client-side img.logo.dev URLs
+# - Secret key (sk_...): For server-side search API with Authorization header
+LOGO_DEV_PUBLISHABLE_KEY = os.environ.get('LOGO_DEV_PUBLISHABLE_KEY')
+LOGO_DEV_SECRET_KEY = os.environ.get('LOGO_DEV_API_KEY')  # Kept for backwards compatibility
 EXA_API_KEY = os.environ.get('EXA_API_KEY')
 
 # In-memory caches for performance
@@ -470,16 +474,28 @@ def get_company_logo(company_name: str) -> Optional[str]:
             'sony': 'sony.com',
             'paramount': 'paramount.com',
             'warner': 'warnerbros.com',
-            'universal': 'universalpictures.com'
+            'universal': 'universalpictures.com',
+            'lego': 'lego.com',
+            'bmw': 'bmw.com',
+            'toyota': 'toyota.com',
+            'honda': 'honda.com',
+            'ford': 'ford.com',
+            'chevrolet': 'chevrolet.com',
+            'mcdonalds': 'mcdonalds.com',
+            'starbucks': 'starbucks.com',
+            'redbull': 'redbull.com'
         }
 
         domain = domain_mappings.get(domain, f"{domain}.com")
 
-        if not LOGO_DEV_API_KEY:
-            return None  # API key not configured
-        
-        # logo.dev URL format - use the simple format
-        logo_url = f"https://img.logo.dev/{domain}?token={LOGO_DEV_API_KEY}&size=200"
+        # Publishable key required for img.logo.dev URLs (not secret key)
+        if not LOGO_DEV_PUBLISHABLE_KEY:
+            print(f"Warning: LOGO_DEV_PUBLISHABLE_KEY not set. Cannot fetch logo for '{company_name}'.")
+            print(f"  Note: img.logo.dev requires a publishable key (pk_...), not a secret key (sk_...).")
+            return None
+
+        # logo.dev URL format - publishable key as query param
+        logo_url = f"https://img.logo.dev/{domain}?token={LOGO_DEV_PUBLISHABLE_KEY}&size=200"
 
         # Cache and return the URL - the frontend can handle 404s
         _logo_cache[cache_key] = logo_url
