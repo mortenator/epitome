@@ -330,23 +330,40 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
                 sunrise = ''
                 sunset = ''
 
-                # Helper function to parse ISO timestamp to time string
-                def parse_iso_time(iso_str):
-                    """Parse ISO timestamp like '2026-01-26T07:43:49.895821117Z' to '7:43 AM'"""
+                # Get timezone ID from API response for proper time conversion
+                location_tz = data.get('timeZone', {})
+                tz_id = location_tz.get('id') if isinstance(location_tz, dict) else None
+
+                # Helper function to parse ISO timestamp to local time string
+                def parse_iso_time(iso_str, timezone_id=None):
+                    """Parse ISO timestamp like '2026-01-26T14:55:00Z' to local time '6:55 AM'"""
                     if not iso_str or not isinstance(iso_str, str):
                         return ''
                     try:
-                        # Parse ISO format
+                        # Parse ISO format (UTC time indicated by 'Z')
                         dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
-                        return dt.strftime('%I:%M %p').lstrip('0')
+
+                        # Convert to local timezone if provided
+                        if timezone_id:
+                            try:
+                                from zoneinfo import ZoneInfo
+                                local_tz = ZoneInfo(timezone_id)
+                                local_dt = dt.astimezone(local_tz)
+                            except (ImportError, KeyError):
+                                # Fallback: just use UTC time
+                                local_dt = dt
+                        else:
+                            local_dt = dt
+
+                        return local_dt.strftime('%I:%M %p').lstrip('0')
                     except (ValueError, TypeError):
                         return ''
 
                 sun_events = target_forecast.get('sunEvents')
                 if isinstance(sun_events, dict):
                     # Format: { 'sunriseTime': 'ISO string', 'sunsetTime': 'ISO string' }
-                    sunrise = parse_iso_time(sun_events.get('sunriseTime'))
-                    sunset = parse_iso_time(sun_events.get('sunsetTime'))
+                    sunrise = parse_iso_time(sun_events.get('sunriseTime'), tz_id)
+                    sunset = parse_iso_time(sun_events.get('sunsetTime'), tz_id)
 
                 # Old format fallback: astronomicalData
                 if not sunrise and not sunset:
@@ -708,6 +725,15 @@ def enrich_production_data(
                     # Set first day's weather as logistics weather
                     if first_date and first_date in weather_results:
                         enriched['logistics']['weather'] = weather_results[first_date]
+
+    # Fetch nearest hospital using primary coordinates
+    if primary_coords:
+        lat = primary_coords.get('lat')
+        lng = primary_coords.get('lng')
+        if lat is not None and lng is not None:
+            hospital = find_nearest_hospital(lat, lng)
+            if hospital:
+                enriched['logistics']['hospital'] = hospital
 
     emit("research", 85, "Finalizing enrichment...")
 

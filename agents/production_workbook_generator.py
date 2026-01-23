@@ -1284,7 +1284,9 @@ class EpitomeWorkbookGenerator:
                 is_last = (right_row == grid_end_row)
 
             # Write talent data row with borders
-            call_time = talent_call if 'talent' in dept.lower() else crew_call
+            # Use talent_call for talent/cast departments, crew_call for others
+            is_talent_dept = any(t in dept.lower() for t in ['talent', 'cast'])
+            call_time = talent_call if is_talent_dept else crew_call
             self._write_crew_row_right(ws, right_row, person, call_time, is_last=is_last, grid_end_row=grid_end_row)
             right_row += 1
 
