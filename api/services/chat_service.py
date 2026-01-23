@@ -29,6 +29,59 @@ except ImportError:
     types = None
 
 
+def _detect_clarification_response(message: str, history: list) -> Optional[Dict[str, Any]]:
+    """
+    Detect if the current message is answering a previous clarifying question.
+    Returns structured info about the pending operation if detected.
+    """
+    if not history or len(history) < 2:
+        return None
+
+    # Get last assistant message and the user message before it
+    last_assistant = None
+    original_user_request = None
+
+    for i in range(len(history) - 1, -1, -1):
+        if history[i].get("role") == "assistant" and not last_assistant:
+            last_assistant = history[i].get("content", "")
+        elif history[i].get("role") == "user" and last_assistant and not original_user_request:
+            original_user_request = history[i].get("content", "")
+            break
+
+    if not last_assistant or not original_user_request:
+        return None
+
+    # Check if assistant was asking a clarifying question
+    clarification_patterns = [
+        "which call time",
+        "which day",
+        "which crew member",
+        "which location",
+        "production, crew, or talent",
+        "production call, crew call, or talent call",
+        "day 1 or day 2",
+        "day 1, day 2",
+        "would you like me to update",
+        "which one",
+        "please specify",
+        "could you clarify",
+    ]
+
+    is_clarifying = last_assistant.endswith("?") and any(
+        pattern in last_assistant.lower() for pattern in clarification_patterns
+    )
+
+    if is_clarifying and len(message.split()) <= 5:  # Short response
+        return {
+            "is_clarification": True,
+            "original_request": original_user_request,
+            "clarifying_question": last_assistant,
+            "user_answer": message
+        }
+
+    return None
+
+
 async def process_chat_message(
     db: AsyncSession,
     project_id: str,
@@ -47,6 +100,19 @@ async def process_chat_message(
     Returns:
         Dict with 'type' ('answer' or 'edit'), 'response', and optionally 'action' and 'parameters'
     """
+    # Check if this is a clarification response
+    clarification = _detect_clarification_response(message, history or [])
+
+    if clarification:
+        # Explicitly tell the LLM this is an answer to complete the operation
+        message = f"""CONTEXT: The user is answering your clarifying question.
+
+Original request: "{clarification['original_request']}"
+Your question: "{clarification['clarifying_question']}"
+User's answer: "{clarification['user_answer']}"
+
+NOW COMPLETE THE ORIGINAL REQUEST using the user's answer. Return an edit action, not an answer."""
+
     # Fetch project data for context
     project_data = await get_project_for_frontend(db, project_id)
     if not project_data:

@@ -524,6 +524,11 @@ When working with Claude on code, always:
 - **Edit Commands**: Natural language commands like "Change crew call time to 8am"
 - **Context-Aware**: Chat has access to full project context (crew, locations, call sheets)
 - **Real-time Updates**: Frontend automatically refreshes after successful edits
+- **Multi-Turn Clarification Handling**: When the LLM asks a clarifying question (e.g., "Which call time: production, crew, or talent?") and the user responds with a short answer (e.g., "production"), the system:
+  - Detects the clarification pattern using `_detect_clarification_response()` in `chat_service.py`
+  - Prepends explicit context to the user's message telling the LLM to complete the original edit request
+  - Ensures the LLM executes the edit instead of re-asking or just reporting current state
+- **Synchronized UI Updates**: Toast confirmation appears only after data refresh completes, ensuring users see updated cards at the same moment they get confirmation
 
 ### Clients Table
 - **Dedicated Client Management**: New `clients` table for better client reporting
