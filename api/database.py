@@ -270,6 +270,8 @@ class CallSheet(Base):
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     generalCrewCall: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    productionCall: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    talentCall: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     firstShot: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     estimatedWrap: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     weatherHigh: Mapped[str | None] = mapped_column(String, nullable=True)

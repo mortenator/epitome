@@ -154,7 +154,9 @@ def _build_project_context(project_data: Dict[str, Any]) -> str:
         lines.append("Call Sheets:")
         for cs in call_sheets:
             lines.append(f"  Day {cs.get('dayNumber')}: {cs.get('shootDate', 'N/A')}")
+            lines.append(f"    Production Call: {cs.get('productionCall', 'TBD')}")
             lines.append(f"    Crew Call: {cs.get('generalCrewCall', 'TBD')}")
+            lines.append(f"    Talent Call: {cs.get('talentCall', 'TBD')}")
             if cs.get("hospital", {}).get("name"):
                 lines.append(f"    Hospital: {cs.get('hospital', {}).get('name')} - {cs.get('hospital', {}).get('address', '')}")
             lines.append(f"    ID: {cs.get('id')}")
@@ -246,6 +248,8 @@ async def _execute_edit_command(
                 day_name=parameters.get("dayName"),
                 shoot_date=parameters.get("shootDate"),
                 general_crew_call=parameters.get("generalCrewCall"),
+                production_call=parameters.get("productionCall"),
+                talent_call=parameters.get("talentCall"),
                 hospital_name=parameters.get("hospitalName"),
                 hospital_address=parameters.get("hospitalAddress")
             )

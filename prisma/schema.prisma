@@ -119,6 +119,8 @@ model call_sheets {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime
   generalCrewCall      DateTime?
+  productionCall       DateTime?
+  talentCall           DateTime?
   firstShot            DateTime?
   estimatedWrap        DateTime?
   weatherHigh          String?

@@ -616,6 +616,8 @@ async def get_project_for_frontend(
                 "dayNumber": cs.dayNumber,
                 "shootDate": cs.shootDate.isoformat() if cs.shootDate else None,
                 "generalCrewCall": format_time(cs.generalCrewCall),
+                "productionCall": format_time(cs.productionCall),
+                "talentCall": format_time(cs.talentCall),
                 "weather": {
                     "high": cs.weatherHigh,
                     "low": cs.weatherLow,
@@ -688,6 +690,8 @@ async def update_call_sheet(
     day_name: Optional[str] = None,
     shoot_date: Optional[str] = None,
     general_crew_call: Optional[str] = None,
+    production_call: Optional[str] = None,
+    talent_call: Optional[str] = None,
     hospital_name: Optional[str] = None,
     hospital_address: Optional[str] = None
 ) -> bool:
@@ -701,6 +705,8 @@ async def update_call_sheet(
         day_name: Optional new day name (not stored directly, but can be used for notes)
         shoot_date: Optional new shoot date (YYYY-MM-DD format)
         general_crew_call: Optional new general crew call time (e.g., "7:45 AM")
+        production_call: Optional new production call time (e.g., "6:30 AM")
+        talent_call: Optional new talent call time (e.g., "9:00 AM")
         hospital_name: Optional new hospital name
         hospital_address: Optional new hospital address
     """
@@ -723,6 +729,12 @@ async def update_call_sheet(
 
     if general_crew_call is not None:
         call_sheet.generalCrewCall = parse_time(general_crew_call, call_sheet.shootDate)
+
+    if production_call is not None:
+        call_sheet.productionCall = parse_time(production_call, call_sheet.shootDate)
+
+    if talent_call is not None:
+        call_sheet.talentCall = parse_time(talent_call, call_sheet.shootDate)
 
     if hospital_name is not None:
         call_sheet.nearestHospital = hospital_name
@@ -1012,7 +1024,8 @@ async def get_project_as_generator_data(
             "day_number": cs.dayNumber,
             "date": cs.shootDate.strftime("%Y-%m-%d") if cs.shootDate else "TBD",
             "crew_call": format_time(cs.generalCrewCall) or "07:00 AM",
-            "talent_call": "09:00 AM",  # Default - not stored separately
+            "production_call": format_time(cs.productionCall) or "06:30 AM",
+            "talent_call": format_time(cs.talentCall) or "09:00 AM",
             "shoot_call": format_time(cs.firstShot) or "08:00 AM",
         }
         # Add day-specific weather
