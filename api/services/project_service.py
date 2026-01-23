@@ -693,7 +693,9 @@ async def update_call_sheet(
 ) -> bool:
     """
     Update call sheet fields.
-    
+
+    When shoot_date is updated, automatically refreshes weather data for the new date.
+
     Args:
         call_sheet_id: ID of the call sheet to update
         day_name: Optional new day name (not stored directly, but can be used for notes)
@@ -706,24 +708,34 @@ async def update_call_sheet(
         select(CallSheet).where(CallSheet.id == call_sheet_id)
     )
     call_sheet = result.scalar_one_or_none()
-    
+
     if not call_sheet:
         return False
-    
+
+    date_changed = False
+
     if shoot_date is not None:
-        call_sheet.shootDate = parse_date(shoot_date) or call_sheet.shootDate
-    
+        new_date = parse_date(shoot_date)
+        if new_date and new_date != call_sheet.shootDate:
+            call_sheet.shootDate = new_date
+            date_changed = True
+            print(f"[CallSheet] Date changed to {shoot_date} for call sheet {call_sheet_id}")
+
     if general_crew_call is not None:
         call_sheet.generalCrewCall = parse_time(general_crew_call, call_sheet.shootDate)
-    
+
     if hospital_name is not None:
         call_sheet.nearestHospital = hospital_name
-    
+
     if hospital_address is not None:
         call_sheet.hospitalAddress = hospital_address
-    
+
     call_sheet.updatedAt = datetime.utcnow()
-    
+
+    # If date changed, refresh weather for the new date
+    if date_changed:
+        await refresh_weather_for_callsheet(db, call_sheet)
+
     await db.commit()
     return True
 
@@ -775,7 +787,12 @@ async def update_location(
 ) -> bool:
     """
     Update location fields.
-    
+
+    When address is updated with a precise address (has coordinates):
+    - Geocodes the address to get lat/lng
+    - Finds the nearest hospital and updates all call sheets
+    - Refreshes weather for all call sheets
+
     Args:
         location_id: ID of the location to update
         address: Optional new address
@@ -785,25 +802,48 @@ async def update_location(
         select(Location).where(Location.id == location_id)
     )
     location = result.scalar_one_or_none()
-    
+
     if not location:
         return False
-    
+
+    new_coords = None
+
     if address is not None:
         location.address = address
-        # Re-geocode the address if we have Google Maps API key
-        from agents.enrichment import get_location_coordinates
+        # Re-geocode the address
+        from agents.enrichment import get_location_coordinates, find_nearest_hospital
+
         coords = get_location_coordinates(address)
         if coords:
             location.latitude = coords['lat']
             location.longitude = coords['lng']
             location.mapLink = f"https://www.google.com/maps/search/?api=1&query={coords['lat']},{coords['lng']}"
-    
+            new_coords = coords
+            print(f"[Location] Geocoded '{address}' to ({coords['lat']}, {coords['lng']})")
+
+            # Find nearest hospital and update call sheets
+            hospital = find_nearest_hospital(coords['lat'], coords['lng'])
+            if hospital:
+                await update_hospital_for_callsheets(
+                    db,
+                    location.projectId,
+                    hospital['name'],
+                    hospital['address']
+                )
+
+            # Refresh weather for all call sheets
+            sheets_result = await db.execute(
+                select(CallSheet).where(CallSheet.projectId == location.projectId)
+            )
+            call_sheets = sheets_result.scalars().all()
+            for cs in call_sheets:
+                await refresh_weather_for_callsheet(db, cs, coords['lat'], coords['lng'])
+
     if name is not None:
         location.name = name
-    
+
     # Note: updatedAt is handled by SQLAlchemy's onupdate
-    
+
     await db.commit()
     return True
 
@@ -1028,3 +1068,102 @@ async def get_project_as_generator_data(
         "schedule_days": schedule_days,
         "crew_list": crew_list,
     }
+
+
+async def refresh_weather_for_callsheet(
+    db: AsyncSession,
+    call_sheet: CallSheet,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None
+) -> bool:
+    """
+    Re-fetch weather data for a call sheet based on its date and location coordinates.
+
+    Args:
+        db: Database session
+        call_sheet: The CallSheet object to update
+        lat: Latitude (if not provided, will try to get from project locations)
+        lng: Longitude (if not provided, will try to get from project locations)
+
+    Returns:
+        True if weather was updated, False otherwise
+    """
+    from agents.enrichment import get_weather_data
+
+    # If no coordinates provided, try to get from project's first location
+    if lat is None or lng is None:
+        locations_result = await db.execute(
+            select(Location).where(Location.projectId == call_sheet.projectId)
+        )
+        locations = locations_result.scalars().all()
+        for loc in locations:
+            if loc.latitude and loc.longitude:
+                lat = float(loc.latitude)
+                lng = float(loc.longitude)
+                break
+
+    if lat is None or lng is None:
+        print(f"Warning: Cannot refresh weather - no coordinates available for call sheet {call_sheet.id}")
+        return False
+
+    if not call_sheet.shootDate:
+        print(f"Warning: Cannot refresh weather - no shoot date for call sheet {call_sheet.id}")
+        return False
+
+    # Get weather data
+    date_str = call_sheet.shootDate.strftime("%Y-%m-%d")
+    weather = get_weather_data(lat, lng, date_str)
+
+    if not weather:
+        print(f"Warning: Could not fetch weather for {date_str} at ({lat}, {lng})")
+        return False
+
+    # Update call sheet weather fields
+    temp_data = weather.get("temperature", {})
+    if isinstance(temp_data, dict):
+        high = temp_data.get("high", "")
+        low = temp_data.get("low", "")
+        call_sheet.weatherHigh = high.replace("F", "").strip() if high else None
+        call_sheet.weatherLow = low.replace("F", "").strip() if low else None
+
+    call_sheet.weatherSummary = weather.get("conditions")
+    call_sheet.sunrise = weather.get("sunrise")
+    call_sheet.sunset = weather.get("sunset")
+    call_sheet.updatedAt = datetime.utcnow()
+
+    print(f"[Weather] Updated call sheet {call_sheet.id} weather: high={call_sheet.weatherHigh}, low={call_sheet.weatherLow}")
+    return True
+
+
+async def update_hospital_for_callsheets(
+    db: AsyncSession,
+    project_id: str,
+    hospital_name: str,
+    hospital_address: str
+) -> int:
+    """
+    Update hospital info on all call sheets for a project.
+
+    Args:
+        db: Database session
+        project_id: Project ID
+        hospital_name: New hospital name
+        hospital_address: New hospital address
+
+    Returns:
+        Number of call sheets updated
+    """
+    sheets_result = await db.execute(
+        select(CallSheet).where(CallSheet.projectId == project_id)
+    )
+    call_sheets = sheets_result.scalars().all()
+
+    count = 0
+    for cs in call_sheets:
+        cs.nearestHospital = hospital_name
+        cs.hospitalAddress = hospital_address
+        cs.updatedAt = datetime.utcnow()
+        count += 1
+
+    print(f"[Hospital] Updated {count} call sheets with hospital: {hospital_name}")
+    return count

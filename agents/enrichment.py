@@ -79,6 +79,99 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     return None
 
 
+def find_nearest_hospital(lat: float, lng: float) -> Optional[dict]:
+    """
+    Find the nearest hospital using Google Places API.
+    Uses text search with "hospital" keyword to find actual hospitals,
+    not just clinics or doctors' offices.
+
+    Args:
+        lat: Latitude
+        lng: Longitude
+
+    Returns:
+        Dict with name and address of nearest hospital, or None if failed
+    """
+    if lat is None or lng is None:
+        return None
+
+    if not GOOGLE_MAPS_API_KEY:
+        print("Warning: GOOGLE_MAPS_API_KEY not set. Cannot find nearest hospital.")
+        return None
+
+    try:
+        # Use text search with "hospital" keyword to find actual hospitals
+        # This is more reliable than type=hospital which returns clinics
+        params = urllib.parse.urlencode({
+            'query': 'hospital emergency room',
+            'location': f"{lat},{lng}",
+            'radius': 25000,  # 25km radius
+            'type': 'hospital',
+            'key': GOOGLE_MAPS_API_KEY
+        })
+        url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?{params}"
+
+        with urllib.request.urlopen(url, timeout=10) as response:
+            data = json.loads(response.read().decode())
+
+        if data.get('status') == 'OK' and data.get('results'):
+            # Filter results to find actual hospitals (not clinics)
+            # Look for keywords that indicate a real hospital
+            hospital_keywords = ['hospital', 'sykehus', 'medical center', 'emergency']
+            clinic_keywords = ['legesenter', 'clinic', 'klinikk', 'doctor', 'dental', 'tannlege']
+
+            for result in data['results']:
+                name_lower = result.get('name', '').lower()
+
+                # Skip if name contains clinic-like keywords
+                if any(kw in name_lower for kw in clinic_keywords):
+                    continue
+
+                # Prefer results with hospital-like keywords
+                if any(kw in name_lower for kw in hospital_keywords):
+                    hospital_name = result.get('name', 'Hospital')
+                    hospital_address = result.get('formatted_address', result.get('vicinity', ''))
+                    print(f"[Hospital] Found: {hospital_name}")
+                    return {
+                        'name': hospital_name,
+                        'address': hospital_address
+                    }
+
+            # If no hospital-keyword match, use first result that's not a clinic
+            for result in data['results']:
+                name_lower = result.get('name', '').lower()
+                if not any(kw in name_lower for kw in clinic_keywords):
+                    hospital_name = result.get('name', 'Hospital')
+                    hospital_address = result.get('formatted_address', result.get('vicinity', ''))
+                    print(f"[Hospital] Found (fallback): {hospital_name}")
+                    return {
+                        'name': hospital_name,
+                        'address': hospital_address
+                    }
+
+            # Last resort: use first result
+            result = data['results'][0]
+            hospital_name = result.get('name', 'Hospital')
+            hospital_address = result.get('formatted_address', result.get('vicinity', ''))
+            print(f"[Hospital] Found (last resort): {hospital_name}")
+            return {
+                'name': hospital_name,
+                'address': hospital_address
+            }
+
+        elif data.get('status') == 'ZERO_RESULTS':
+            print(f"Warning: No hospitals found near ({lat}, {lng})")
+            return None
+        else:
+            print(f"Warning: Places API returned status: {data.get('status')}")
+            return None
+
+    except Exception as e:
+        print(f"Warning: Failed to find nearest hospital: {e}")
+
+    return None
+
+
 def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     """
     Get weather data for a location and date using Google Maps Platform Weather API.
@@ -168,7 +261,8 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             target_forecast = None
             for forecast in forecasts:
                 # Handle different date formats in response
-                date_obj = forecast.get('date', {})
+                # Try 'displayDate' first (newer API), then 'date' (older API)
+                date_obj = forecast.get('displayDate') or forecast.get('date', {})
                 if isinstance(date_obj, dict):
                     forecast_date = date_obj.get('year', 0), date_obj.get('month', 0), date_obj.get('day', 0)
                     forecast_date_str = f"{forecast_date[0]}-{forecast_date[1]:02d}-{forecast_date[2]:02d}"
@@ -182,38 +276,98 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
             if not target_forecast:
                 # If exact date not found, use first forecast (closest match)
                 target_forecast = forecasts[0] if forecasts else None
-            
+
             if target_forecast:
-                # Extract temperature data
-                temp_data = target_forecast.get('temperature', {})
-                temp_high = temp_data.get('max')
-                temp_low = temp_data.get('min')
-                
-                # Extract conditions
-                conditions_data = target_forecast.get('condition', '')
-                conditions = conditions_data if conditions_data else 'Unknown'
-                
-                # Extract sunrise/sunset
-                astro_data = target_forecast.get('astronomicalData', {})
-                sunrise_data = astro_data.get('sunrise', {})
-                sunset_data = astro_data.get('sunset', {})
-                
+                # Debug: Log full forecast structure for first time
+                print(f"[DEBUG] Target forecast sample: maxTemp={target_forecast.get('maxTemperature')}, sunEvents={type(target_forecast.get('sunEvents'))}")
+
+                # Extract temperature data - handle both API formats
+                # New format: maxTemperature/minTemperature at top level
+                # The value can be a dict with 'degrees' or a direct number
+                temp_high = None
+                temp_low = None
+
+                if 'maxTemperature' in target_forecast:
+                    # New API format
+                    max_temp_obj = target_forecast.get('maxTemperature')
+                    min_temp_obj = target_forecast.get('minTemperature')
+
+                    # Handle various possible formats
+                    if isinstance(max_temp_obj, dict):
+                        temp_high = max_temp_obj.get('degrees') or max_temp_obj.get('value')
+                    elif isinstance(max_temp_obj, (int, float)):
+                        temp_high = max_temp_obj
+
+                    if isinstance(min_temp_obj, dict):
+                        temp_low = min_temp_obj.get('degrees') or min_temp_obj.get('value')
+                    elif isinstance(min_temp_obj, (int, float)):
+                        temp_low = min_temp_obj
+                else:
+                    # Old API format
+                    temp_data = target_forecast.get('temperature', {})
+                    if isinstance(temp_data, dict):
+                        temp_high = temp_data.get('max')
+                        temp_low = temp_data.get('min')
+
+                # Extract conditions from daytimeForecast.weatherCondition.description.text
+                conditions = 'Unknown'
+                daytime = target_forecast.get('daytimeForecast')
+                if isinstance(daytime, dict):
+                    weather_cond = daytime.get('weatherCondition', {})
+                    if isinstance(weather_cond, dict):
+                        desc = weather_cond.get('description', {})
+                        if isinstance(desc, dict):
+                            conditions = desc.get('text', 'Unknown')
+                        elif isinstance(desc, str):
+                            conditions = desc
+                    elif isinstance(weather_cond, str):
+                        conditions = weather_cond
+                elif 'condition' in target_forecast:
+                    cond = target_forecast.get('condition')
+                    conditions = cond if isinstance(cond, str) else 'Unknown'
+
+                # Extract sunrise/sunset from sunEvents
                 sunrise = ''
                 sunset = ''
-                if sunrise_data:
-                    hour = sunrise_data.get('hour', 0)
-                    minute = sunrise_data.get('minute', 0)
-                    sunrise_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
-                    sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
-                if sunset_data:
-                    hour = sunset_data.get('hour', 0)
-                    minute = sunset_data.get('minute', 0)
-                    sunset_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
-                    sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
-                
+
+                # Helper function to parse ISO timestamp to time string
+                def parse_iso_time(iso_str):
+                    """Parse ISO timestamp like '2026-01-26T07:43:49.895821117Z' to '7:43 AM'"""
+                    if not iso_str or not isinstance(iso_str, str):
+                        return ''
+                    try:
+                        # Parse ISO format
+                        dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+                        return dt.strftime('%I:%M %p').lstrip('0')
+                    except (ValueError, TypeError):
+                        return ''
+
+                sun_events = target_forecast.get('sunEvents')
+                if isinstance(sun_events, dict):
+                    # Format: { 'sunriseTime': 'ISO string', 'sunsetTime': 'ISO string' }
+                    sunrise = parse_iso_time(sun_events.get('sunriseTime'))
+                    sunset = parse_iso_time(sun_events.get('sunsetTime'))
+
+                # Old format fallback: astronomicalData
+                if not sunrise and not sunset:
+                    astro_data = target_forecast.get('astronomicalData', {})
+                    if isinstance(astro_data, dict):
+                        sunrise_data = astro_data.get('sunrise', {})
+                        sunset_data = astro_data.get('sunset', {})
+                        if isinstance(sunrise_data, dict):
+                            hour = sunrise_data.get('hour', 0)
+                            minute = sunrise_data.get('minute', 0)
+                            sunrise_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+                            sunrise = sunrise_dt.strftime('%I:%M %p').lstrip('0')
+                        if isinstance(sunset_data, dict):
+                            hour = sunset_data.get('hour', 0)
+                            minute = sunset_data.get('minute', 0)
+                            sunset_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+                            sunset = sunset_dt.strftime('%I:%M %p').lstrip('0')
+
                 # Extract wind data
                 wind_data = target_forecast.get('wind', {})
-                wind_speed = wind_data.get('speed')
+                wind_speed = wind_data.get('speed') if isinstance(wind_data, dict) else None
                 
                 weather_result = {
                     'date': date,
