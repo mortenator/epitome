@@ -2100,10 +2100,19 @@ def _extract_json_from_response(text: str) -> dict:
     try:
         return json.loads(json_str)
     except json.JSONDecodeError as e:
-        print(f"[WARN] Initial JSON parse failed, attempting repair: {e}")
+        print(f"[WARN] Initial JSON parse failed: {e}")
         print(f"[WARN] JSON string length: {len(json_str)}")
-        
-        # Try to repair truncated JSON
+
+        # Try fixing missing commas first (common LLM error)
+        try:
+            comma_fixed = _fix_missing_commas(json_str)
+            if comma_fixed != json_str:
+                print(f"[INFO] Fixed missing commas, retrying parse...")
+                return json.loads(comma_fixed)
+        except json.JSONDecodeError:
+            pass  # Continue to full repair
+
+        # Try full repair for truncated JSON
         try:
             repaired_json = _repair_truncated_json(json_str)
             print(f"[INFO] Attempting to parse repaired JSON (length: {len(repaired_json)})")
@@ -2111,149 +2120,218 @@ def _extract_json_from_response(text: str) -> dict:
             return json.loads(repaired_json)
         except json.JSONDecodeError as e2:
             print(f"[ERROR] Failed to parse JSON even after repair: {e2}")
-            print(f"[ERROR] JSON string (first 1000 chars): {json_str[:1000]}")
-            print(f"[ERROR] JSON string length: {len(json_str)}")
-            # Try to find where the error occurred
+            print(f"[ERROR] Repaired JSON (first 1000 chars): {repaired_json[:1000]}")
+            print(f"[ERROR] Repaired JSON length: {len(repaired_json)}")
+            # Try to find where the error occurred in repaired JSON
             if hasattr(e2, 'pos') and e2.pos is not None:
-                print(f"[ERROR] Error position: {e2.pos}")
+                print(f"[ERROR] Error position in repaired JSON: {e2.pos}")
                 start_pos = max(0, e2.pos - 200)
-                end_pos = min(len(json_str), e2.pos + 200)
-                print(f"[ERROR] Context before error ({max(0, start_pos-500)}:{start_pos}): ...{json_str[max(0, start_pos-500):start_pos]}")
-                print(f"[ERROR] Context around error ({start_pos}:{end_pos}): {json_str[start_pos:end_pos]}")
-                print(f"[ERROR] Context after error ({end_pos}:{min(len(json_str), end_pos+500)}): {json_str[end_pos:min(len(json_str), end_pos+500)]}...")
+                end_pos = min(len(repaired_json), e2.pos + 200)
+                print(f"[ERROR] Context around error ({start_pos}:{end_pos}): {repaired_json[start_pos:end_pos]}")
             raise ValueError(f"Invalid JSON response from LLM: {e2}")
+
+
+def _fix_missing_commas(json_str: str) -> str:
+    """Fix missing commas between JSON elements.
+
+    Handles cases where the LLM outputs consecutive elements without commas:
+    - }{ -> },{
+    - }[ -> },[
+    - ]{ -> ],{
+    - ][ -> ],[
+    - }" -> },"  (missing comma before next key)
+    - ]" -> ],"  (missing comma before next element)
+    - "{ -> ",{  (missing comma after string value before object)
+    - "[ -> ",[  (missing comma after string value before array)
+    - "" -> ","  (missing comma between strings)
+    - true/false/null/number followed by " or { or [
+    """
+    result = []
+    i = 0
+    in_string = False
+    escape_next = False
+
+    while i < len(json_str):
+        char = json_str[i]
+
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            i += 1
+            continue
+
+        if char == '\\' and in_string:
+            result.append(char)
+            escape_next = True
+            i += 1
+            continue
+
+        if char == '"':
+            if in_string:
+                # Closing quote - check if we need comma after
+                result.append(char)
+                in_string = False
+                # Look ahead for missing comma
+                j = i + 1
+                while j < len(json_str) and json_str[j] in ' \t\n\r':
+                    j += 1
+                if j < len(json_str) and json_str[j] in '"{[':
+                    # Check it's not a colon (key-value separator)
+                    # Look back to see if this was a key
+                    k = j
+                    while k < len(json_str) and json_str[k] in ' \t\n\r':
+                        k += 1
+                    if k < len(json_str) and json_str[k] != ':':
+                        result.append(',')
+                i += 1
+            else:
+                # Opening quote
+                in_string = True
+                result.append(char)
+                i += 1
+            continue
+
+        if in_string:
+            result.append(char)
+            i += 1
+            continue
+
+        # Not in string - check for missing comma patterns
+        if char in '}]':
+            result.append(char)
+            # Look ahead, skipping whitespace
+            j = i + 1
+            while j < len(json_str) and json_str[j] in ' \t\n\r':
+                j += 1
+            # Check if next non-whitespace char needs a comma before it
+            if j < len(json_str) and json_str[j] in '{["':
+                result.append(',')
+            i += 1
+        elif char in 'truefalsn' and not in_string:
+            # Could be true, false, or null - check for missing comma after
+            result.append(char)
+            # Check if this completes a keyword
+            keywords = {'true': 4, 'false': 5, 'null': 4}
+            for kw, length in keywords.items():
+                if json_str[i:i+length] == kw:
+                    result.extend(json_str[i+1:i+length])
+                    i += length
+                    # Look ahead for missing comma
+                    j = i
+                    while j < len(json_str) and json_str[j] in ' \t\n\r':
+                        j += 1
+                    if j < len(json_str) and json_str[j] in '"{[':
+                        result.append(',')
+                    break
+            else:
+                i += 1
+        elif char.isdigit() or char == '-':
+            # Number - collect the whole number then check for missing comma
+            result.append(char)
+            i += 1
+            while i < len(json_str) and (json_str[i].isdigit() or json_str[i] in '.eE+-'):
+                result.append(json_str[i])
+                i += 1
+            # Look ahead for missing comma
+            j = i
+            while j < len(json_str) and json_str[j] in ' \t\n\r':
+                j += 1
+            if j < len(json_str) and json_str[j] in '"{[':
+                result.append(',')
+        else:
+            result.append(char)
+            i += 1
+
+    return ''.join(result)
 
 
 def _repair_truncated_json(json_str: str) -> str:
     """Try to repair truncated JSON by closing open structures.
-    
+
     Handles cases where JSON is truncated mid-structure, including:
     - Unclosed strings
-    - Incomplete field values  
+    - Incomplete field values
     - Unclosed objects/arrays
     """
+    # First fix any missing commas between objects/arrays
+    json_str = _fix_missing_commas(json_str)
     json_str = json_str.strip()
-    
-    # Track state as we iterate through the string
-    in_string = False
-    escape_next = False
-    brace_depth = 0
-    bracket_depth = 0
-    
-    # First pass: count braces and brackets, track string state
-    for i, char in enumerate(json_str):
-        if escape_next:
-            escape_next = False
-            continue
-            
-        if char == '\\':
-            escape_next = True
-            continue
-            
-        if char == '"':
-            in_string = not in_string
-        elif not in_string:
-            if char == '{':
-                brace_depth += 1
-            elif char == '}':
-                brace_depth -= 1
-            elif char == '[':
-                bracket_depth += 1
-            elif char == ']':
-                bracket_depth -= 1
-    
-    # Remove trailing whitespace
-    json_str = json_str.rstrip()
-    
+
+    def count_structure(s: str):
+        """Count open braces, brackets, and check if in string."""
+        in_string = False
+        escape_next = False
+        braces = 0  # { increases, } decreases
+        brackets = 0  # [ increases, ] decreases
+
+        for char in s:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+            elif not in_string:
+                if char == '{':
+                    braces += 1
+                elif char == '}':
+                    braces -= 1
+                elif char == '[':
+                    brackets += 1
+                elif char == ']':
+                    brackets -= 1
+
+        return braces, brackets, in_string
+
+    # Count current state
+    braces, brackets, in_string = count_structure(json_str)
+
     # If we're in a string at the end, close it
     if in_string:
         json_str += '"'
-        in_string = False  # Update state after closing string
-    
-    # Re-count depths after potential string closure
-    # Use a smarter approach: find what's actually open at the END by scanning backwards
-    # Scan from the end to find actual open structures
-    # This is more accurate than global count for truncated JSON
-    end_brace_depth = 0
-    end_bracket_depth = 0
-    scan_in_string = False
-    scan_escape = False
-    
-    # Work backwards from the end
-    i = len(json_str) - 1
-    while i >= 0:
-        char = json_str[i]
-        if scan_escape:
-            scan_escape = False
-            i -= 1
+        # Recount after closing string
+        braces, brackets, in_string = count_structure(json_str)
+
+    # Remove trailing whitespace and commas
+    json_str = json_str.rstrip()
+    while json_str.endswith(','):
+        json_str = json_str[:-1].rstrip()
+
+    # We need to close structures in the right order
+    # Look at what's open and close them properly
+    # The order matters: we need to close inner structures first
+
+    # Build closing sequence by tracking what was opened
+    closings = []
+    temp_in_string = False
+    temp_escape = False
+    for char in json_str:
+        if temp_escape:
+            temp_escape = False
             continue
-        if char == '\\' and i > 0:
-            # Check if this is an escape sequence
-            scan_escape = True
-            i -= 1
+        if char == '\\' and temp_in_string:
+            temp_escape = True
             continue
         if char == '"':
-            scan_in_string = not scan_in_string
-        elif not scan_in_string:
-            if char == '}':
-                end_brace_depth += 1
-            elif char == '{':
-                if end_brace_depth > 0:
-                    end_brace_depth -= 1
-                else:
-                    # Found an unclosed opening brace
-                    break
-            elif char == ']':
-                end_bracket_depth += 1
+            temp_in_string = not temp_in_string
+        elif not temp_in_string:
+            if char == '{':
+                closings.append('}')
+            elif char == '}':
+                if closings and closings[-1] == '}':
+                    closings.pop()
             elif char == '[':
-                if end_bracket_depth > 0:
-                    end_bracket_depth -= 1
-                else:
-                    # Found an unclosed opening bracket
-                    break
-        i -= 1
-    
-    # Use the more accurate depth counting
-    brace_depth = end_brace_depth
-    bracket_depth = end_bracket_depth
-    
-    # Check if we have an incomplete field (colon without complete value)
-    # Look for pattern: "key": "incomplete or "key": incomplete
-    # We need to find the last colon and see if what follows is complete
-    last_colon_pos = json_str.rfind(':')
-    if last_colon_pos > 0 and not in_string:
-        after_colon = json_str[last_colon_pos + 1:].strip()
-        # If after colon is empty or starts a string that's not closed, complete it
-        if not after_colon:
-            # No value after colon - add null
-            json_str += 'null'
-        elif after_colon.startswith('"') and not after_colon.endswith('"'):
-            # String started but not closed - should already be handled above
-            pass
-        elif after_colon and not any(after_colon.startswith(p) for p in ['"', '[', '{', 'null', 'true', 'false', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']):
-            # Value looks incomplete - this shouldn't happen normally, but if it does, add null
-            # Actually, if we get here, the string closing above should have handled it
-            pass
-    
-    # Remove trailing comma if present
-    json_str = json_str.rstrip()
-    if json_str.endswith(','):
-        json_str = json_str[:-1].rstrip()
-    
-    # Close open objects first (they might be inside arrays)
-    # Objects need to be closed before arrays that contain them
-    if brace_depth > 0:
-        json_str += '\n' + '}' * brace_depth
-    
-    # Close open arrays
-    if bracket_depth > 0:
-        json_str += '\n' + ']' * bracket_depth
-    
-    # Final cleanup: remove any trailing comma again after closing structures
-    json_str = json_str.rstrip()
-    if json_str.endswith(','):
-        json_str = json_str[:-1].rstrip()
-    
+                closings.append(']')
+            elif char == ']':
+                if closings and closings[-1] == ']':
+                    closings.pop()
+
+    # Close in reverse order (LIFO)
+    if closings:
+        json_str += ''.join(reversed(closings))
+
     return json_str
 
 
@@ -2319,7 +2397,9 @@ def run_tool(
 
     # Build user message
     today = datetime.now().strftime("%Y-%m-%d")
-    
+
+    emit("preparing_extraction", 22, "Preparing AI prompt...")
+
     # Handle empty prompt - if no prompt but file is provided, use default message
     if prompt and prompt.strip():
         user_message = f"Today's date is {today}.\n\nUser request: {prompt}"
@@ -2330,34 +2410,38 @@ def run_tool(
     if attached_file_content:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"
 
-    # Stage 3: Extracting data with LLM
-    emit("extracting_data", 25, "Sending to AI for extraction...")
-    emit("extracting_data", 35, "AI is analyzing and extracting production data...")
-    
-    # Show progress during API call (this is where most time is spent)
-    if attached_file_content and len(attached_file_content) > 5000:
-        emit("extracting_data", 40, "Processing large file content with AI...")
-
     # Use system instruction for better compatibility
     from google.genai import types
-    
+
     config = types.GenerateContentConfig(
         temperature=0.2,
-        maxOutputTokens=16384,  # Increased to handle very large responses with many crew members
+        maxOutputTokens=65536,  # Maximum tokens to handle very large crew lists (100+ members)
         systemInstruction=EPITOME_EXTRACTION_SYSTEM_PROMPT,
     )
-    
-    emit("extracting_data", 50, "Calling Gemini API...")
-    
+
+    # Stage 3: Sending to AI
+    emit("sending_to_ai", 28, "Sending to AI...")
+
+    # Show file size info if processing a file
+    if attached_file_content:
+        file_size_kb = len(attached_file_content) // 1024
+        if file_size_kb > 5:
+            emit("sending_to_ai", 32, f"Uploading {file_size_kb}KB of data...")
+
+    # Stage 4: AI Processing (this is where most time is spent)
+    emit("ai_processing", 38, "AI is reading your data...")
+    emit("ai_processing", 42, "AI is analyzing crew information...")
+    emit("ai_processing", 48, "AI is extracting schedule details...")
+
     response = client.models.generate_content(
         model="gemini-2.0-flash-exp",  # Use available model
         contents=user_message,
         config=config
     )
-    
-    emit("extracting_data", 65, "Received response from AI, parsing...")
 
-    emit("extracting_data", 60, "Parsing extracted data...")
+    # Stage 5: Parsing response
+    emit("parsing_response", 58, "Received AI response...")
+    emit("parsing_response", 62, "Parsing extracted data...")
 
     # Extract JSON from response - handle various response scenarios
     try:
@@ -2401,7 +2485,10 @@ def run_tool(
         print(f"[ERROR] Response text: {response_text[:1000]}")
         raise
     
-    emit("extracting_data", 70, "Data extraction complete")
+    # Show what was extracted
+    crew_count = len(extracted_data.get('crew_list', []))
+    days_count = len(extracted_data.get('schedule_days', []))
+    emit("extraction_complete", 68, f"Found {crew_count} crew members, {days_count} shoot days")
 
     # Stage 4-6: Enrich data with external APIs (sub-progress in enrichment.py)
     if enrich:
@@ -2417,14 +2504,14 @@ def run_tool(
     print(f"[DEBUG]   Schedule days: {len(enriched_data.get('schedule_days', []))}")
 
     # Stage 7: Generate workbook
-    emit("generating", 90, "Generating workbook...")
+    days_count = len(enriched_data.get('schedule_days', []))
+    emit("generating", 90, f"Building {days_count} call sheet{'s' if days_count != 1 else ''}...")
 
     output_file = "Epitome_Production_Workbook.xlsx"
     generator = EpitomeWorkbookGenerator(data=enriched_data, output_filename=output_file)
     final_path = generator.generate()
 
-    # Stage 8: Complete
-    emit("complete", 100, "Complete!")
+    emit("generating", 91, "Workbook created successfully")
 
     return {
         'workbook_path': final_path,
