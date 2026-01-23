@@ -1947,10 +1947,12 @@ class EpitomeWorkbookGenerator:
 
 def _extract_json_from_response(text: str) -> dict:
     """Extract JSON from LLM response, handling markdown code blocks."""
-    # Try to find JSON in markdown code block
-    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+    # Try to find JSON in markdown code block (greedy match to handle truncation)
+    json_match = re.search(r'```(?:json)?\s*([\s\S]*)', text)
     if json_match:
-        json_str = json_match.group(1)
+        json_str = json_match.group(1).strip()
+        # Remove closing ``` if present
+        json_str = re.sub(r'\s*```\s*$', '', json_str)
     else:
         # Try to find JSON object in the text
         # Look for first { and last }
@@ -1962,12 +1964,165 @@ def _extract_json_from_response(text: str) -> dict:
             # Assume the entire response is JSON
             json_str = text.strip()
     
+    # First attempt to parse without repair
     try:
         return json.loads(json_str)
     except json.JSONDecodeError as e:
-        print(f"[ERROR] Failed to parse JSON: {e}")
-        print(f"[ERROR] JSON string (first 1000 chars): {json_str[:1000]}")
-        raise ValueError(f"Invalid JSON response from LLM: {e}")
+        print(f"[WARN] Initial JSON parse failed, attempting repair: {e}")
+        print(f"[WARN] JSON string length: {len(json_str)}")
+        
+        # Try to repair truncated JSON
+        try:
+            repaired_json = _repair_truncated_json(json_str)
+            print(f"[INFO] Attempting to parse repaired JSON (length: {len(repaired_json)})")
+            print(f"[DEBUG] Last 200 chars of repaired JSON: ...{repaired_json[-200:]}")
+            return json.loads(repaired_json)
+        except json.JSONDecodeError as e2:
+            print(f"[ERROR] Failed to parse JSON even after repair: {e2}")
+            print(f"[ERROR] JSON string (first 1000 chars): {json_str[:1000]}")
+            print(f"[ERROR] JSON string length: {len(json_str)}")
+            # Try to find where the error occurred
+            if hasattr(e2, 'pos') and e2.pos is not None:
+                print(f"[ERROR] Error position: {e2.pos}")
+                start_pos = max(0, e2.pos - 200)
+                end_pos = min(len(json_str), e2.pos + 200)
+                print(f"[ERROR] Context before error ({max(0, start_pos-500)}:{start_pos}): ...{json_str[max(0, start_pos-500):start_pos]}")
+                print(f"[ERROR] Context around error ({start_pos}:{end_pos}): {json_str[start_pos:end_pos]}")
+                print(f"[ERROR] Context after error ({end_pos}:{min(len(json_str), end_pos+500)}): {json_str[end_pos:min(len(json_str), end_pos+500)]}...")
+            raise ValueError(f"Invalid JSON response from LLM: {e2}")
+
+
+def _repair_truncated_json(json_str: str) -> str:
+    """Try to repair truncated JSON by closing open structures.
+    
+    Handles cases where JSON is truncated mid-structure, including:
+    - Unclosed strings
+    - Incomplete field values  
+    - Unclosed objects/arrays
+    """
+    json_str = json_str.strip()
+    
+    # Track state as we iterate through the string
+    in_string = False
+    escape_next = False
+    brace_depth = 0
+    bracket_depth = 0
+    
+    # First pass: count braces and brackets, track string state
+    for i, char in enumerate(json_str):
+        if escape_next:
+            escape_next = False
+            continue
+            
+        if char == '\\':
+            escape_next = True
+            continue
+            
+        if char == '"':
+            in_string = not in_string
+        elif not in_string:
+            if char == '{':
+                brace_depth += 1
+            elif char == '}':
+                brace_depth -= 1
+            elif char == '[':
+                bracket_depth += 1
+            elif char == ']':
+                bracket_depth -= 1
+    
+    # Remove trailing whitespace
+    json_str = json_str.rstrip()
+    
+    # If we're in a string at the end, close it
+    if in_string:
+        json_str += '"'
+        in_string = False  # Update state after closing string
+    
+    # Re-count depths after potential string closure
+    # Use a smarter approach: find what's actually open at the END by scanning backwards
+    # Scan from the end to find actual open structures
+    # This is more accurate than global count for truncated JSON
+    end_brace_depth = 0
+    end_bracket_depth = 0
+    scan_in_string = False
+    scan_escape = False
+    
+    # Work backwards from the end
+    i = len(json_str) - 1
+    while i >= 0:
+        char = json_str[i]
+        if scan_escape:
+            scan_escape = False
+            i -= 1
+            continue
+        if char == '\\' and i > 0:
+            # Check if this is an escape sequence
+            scan_escape = True
+            i -= 1
+            continue
+        if char == '"':
+            scan_in_string = not scan_in_string
+        elif not scan_in_string:
+            if char == '}':
+                end_brace_depth += 1
+            elif char == '{':
+                if end_brace_depth > 0:
+                    end_brace_depth -= 1
+                else:
+                    # Found an unclosed opening brace
+                    break
+            elif char == ']':
+                end_bracket_depth += 1
+            elif char == '[':
+                if end_bracket_depth > 0:
+                    end_bracket_depth -= 1
+                else:
+                    # Found an unclosed opening bracket
+                    break
+        i -= 1
+    
+    # Use the more accurate depth counting
+    brace_depth = end_brace_depth
+    bracket_depth = end_bracket_depth
+    
+    # Check if we have an incomplete field (colon without complete value)
+    # Look for pattern: "key": "incomplete or "key": incomplete
+    # We need to find the last colon and see if what follows is complete
+    last_colon_pos = json_str.rfind(':')
+    if last_colon_pos > 0 and not in_string:
+        after_colon = json_str[last_colon_pos + 1:].strip()
+        # If after colon is empty or starts a string that's not closed, complete it
+        if not after_colon:
+            # No value after colon - add null
+            json_str += 'null'
+        elif after_colon.startswith('"') and not after_colon.endswith('"'):
+            # String started but not closed - should already be handled above
+            pass
+        elif after_colon and not any(after_colon.startswith(p) for p in ['"', '[', '{', 'null', 'true', 'false', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']):
+            # Value looks incomplete - this shouldn't happen normally, but if it does, add null
+            # Actually, if we get here, the string closing above should have handled it
+            pass
+    
+    # Remove trailing comma if present
+    json_str = json_str.rstrip()
+    if json_str.endswith(','):
+        json_str = json_str[:-1].rstrip()
+    
+    # Close open objects first (they might be inside arrays)
+    # Objects need to be closed before arrays that contain them
+    if brace_depth > 0:
+        json_str += '\n' + '}' * brace_depth
+    
+    # Close open arrays
+    if bracket_depth > 0:
+        json_str += '\n' + ']' * bracket_depth
+    
+    # Final cleanup: remove any trailing comma again after closing structures
+    json_str = json_str.rstrip()
+    if json_str.endswith(','):
+        json_str = json_str[:-1].rstrip()
+    
+    return json_str
 
 
 def _get_api_key() -> str:
@@ -2032,7 +2187,13 @@ def run_tool(
 
     # Build user message
     today = datetime.now().strftime("%Y-%m-%d")
-    user_message = f"Today's date is {today}.\n\nUser request: {prompt}"
+    
+    # Handle empty prompt - if no prompt but file is provided, use default message
+    if prompt and prompt.strip():
+        user_message = f"Today's date is {today}.\n\nUser request: {prompt}"
+    else:
+        # No prompt provided - extract information from the file only
+        user_message = f"Today's date is {today}.\n\nExtract production information from the attached file and create call sheets."
 
     if attached_file_content:
         user_message += f"\n\nAttached file content:\n{attached_file_content}"
@@ -2050,7 +2211,7 @@ def run_tool(
     
     config = types.GenerateContentConfig(
         temperature=0.2,
-        maxOutputTokens=4096,
+        maxOutputTokens=16384,  # Increased to handle very large responses with many crew members
         systemInstruction=EPITOME_EXTRACTION_SYSTEM_PROMPT,
     )
     
@@ -2103,11 +2264,6 @@ def run_tool(
         print(f"[DEBUG] Extracted data keys: {list(extracted_data.keys())}")
         print(f"[DEBUG] Job name: {extracted_data.get('production_info', {}).get('job_name', 'N/A')}")
         print(f"[DEBUG] Crew count: {len(extracted_data.get('crew_list', []))}")
-        # #region agent log
-        with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-            import json, time
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"production_workbook_generator.py:2105","message":"schedule_days after LLM extraction","data":{"schedule_days":extracted_data.get('schedule_days',[]),"count":len(extracted_data.get('schedule_days',[]))},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     except Exception as e:
         print(f"[ERROR] Failed to parse JSON: {e}")
         print(f"[ERROR] Response text: {response_text[:1000]}")
@@ -2120,12 +2276,6 @@ def run_tool(
         enriched_data = enrich_production_data(extracted_data, progress_callback=progress_callback)
     else:
         enriched_data = extracted_data
-    
-    # #region agent log
-    with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-        import json, time
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"production_workbook_generator.py:2117","message":"schedule_days after enrichment","data":{"schedule_days":enriched_data.get('schedule_days',[]),"count":len(enriched_data.get('schedule_days',[]))},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
     
     # Debug: Verify data before generating workbook
     print(f"[DEBUG] Before workbook generation:")
