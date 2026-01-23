@@ -1,0 +1,29 @@
+# Files to ignore when deploying to Railway
+# (Similar to .gitignore but for Railway builds)
+
+# Generated files
+output/
+*.xlsx
+*.xls
+
+# Environment files (use Railway variables instead)
+.env
+.env.local
+
+# Development files
+.cursor/
+debug.log
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules (will be installed during build)
+node_modules/
+frontend_source/node_modules/
+
+# Build artifacts (will be generated)
+frontend_source/dist/
+frontend_source/.vite/

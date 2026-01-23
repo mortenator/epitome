@@ -1,0 +1,34 @@
+# Dockerfile for Railway deployment
+FROM python:3.11-slim
+
+# Install Node.js (needed for frontend build)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy frontend source and build
+COPY frontend_source/package*.json ./frontend_source/
+WORKDIR /app/frontend_source
+RUN npm ci
+COPY frontend_source/ ./
+RUN npm run build
+
+# Copy built frontend to static directory
+WORKDIR /app
+RUN mkdir -p static && cp -r frontend_source/dist/* static/
+
+# Copy the rest of the application
+COPY . .
+
+# Expose port (Railway sets PORT env var)
+ENV PORT=8000
+EXPOSE $PORT
+
+# Start the application
+CMD python -m uvicorn api.main:app --host 0.0.0.0 --port $PORT

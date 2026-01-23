@@ -64,5 +64,9 @@ htmlcov/
 Thumbs.db
 
 # Frontend source (Lovable repo clone)
-frontend_source/
+# Note: frontend_source/ is NOT ignored - needed for Railway deployment
+# frontend_source/
 node_modules
+frontend_source/node_modules
+frontend_source/dist
+frontend_source/.vite
