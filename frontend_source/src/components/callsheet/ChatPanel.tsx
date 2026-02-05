@@ -125,8 +125,10 @@ interface ChatPanelProps {
 
 export function ChatPanel({ onRegenerate }: ChatPanelProps) {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
-  const { data: projectData, refetch } = useProject(projectId);
+  // Support both project ID (normal) and job ID (fallback when database save fails)
+  const projectId = searchParams.get("project") || searchParams.get("job");
+  const isJobId = !searchParams.get("project") && !!searchParams.get("job");
+  const { data: projectData, refetch } = useProject(projectId, isJobId);
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");

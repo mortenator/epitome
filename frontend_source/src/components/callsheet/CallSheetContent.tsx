@@ -7,7 +7,9 @@ import { useWorkbookRegeneration } from "@/hooks/useWorkbookRegeneration";
 
 export function CallSheetContent() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  // Support both project ID (normal) and job ID (fallback when database save fails)
+  const projectId = searchParams.get("project") || searchParams.get("job");
+  const isJobId = !searchParams.get("project") && !!searchParams.get("job");
   const initialDownloadFilename = searchParams.get("download");
 
   const [activeTab, setActiveTab] = useState<"chat" | "preview">("preview");
