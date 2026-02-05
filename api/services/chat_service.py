@@ -159,7 +159,7 @@ Please respond with valid JSON only, no markdown formatting."""
         )
         
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.0-flash",
             contents=user_prompt,
             config=config
         )

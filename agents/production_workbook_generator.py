@@ -2434,7 +2434,7 @@ def run_tool(
     emit("ai_processing", 48, "AI is extracting schedule details...")
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash-exp",  # Use available model
+        model="gemini-2.0-flash",
         contents=user_message,
         config=config
     )
