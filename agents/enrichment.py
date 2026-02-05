@@ -704,23 +704,12 @@ def enrich_production_data(
                 except (ValueError, TypeError):
                     return False
 
-            # #region agent log
-            import json, time
-            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"enrichment.py:488","message":"schedule_days before date validation","data":{"schedule_days":schedule_days,"count":len(schedule_days)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
-
             dates_to_fetch = [
                 day.get('date') 
                 for day in schedule_days 
                 if day.get('date') and is_valid_date(day.get('date'))
             ]
-            
-            # #region agent log
-            with open('/Users/mortenbruun/Epitome/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"enrichment.py:496","message":"dates_to_fetch after validation","data":{"dates_to_fetch":dates_to_fetch,"count":len(dates_to_fetch),"filtered_out":len(schedule_days)-len(dates_to_fetch)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
-            
+
             if not dates_to_fetch:
                 print("Warning: No valid dates found for weather data. Skipping weather fetch.")
             else:
