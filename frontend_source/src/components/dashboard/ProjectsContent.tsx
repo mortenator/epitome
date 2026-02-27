@@ -39,12 +39,12 @@ export function ProjectsContent() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Projects</h1>
           <p className="text-sm text-muted-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
         </div>
-        <button className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
+        <button className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
           <Plus className="h-4 w-4" />
           New project
         </button>
