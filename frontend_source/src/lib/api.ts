@@ -330,3 +330,32 @@ export async function sendChatMessage(
 
   return response.json();
 }
+
+export interface ProjectSummary {
+  id: string;
+  jobName: string;
+  client: string;
+  status: string;
+  createdAt: string | null;
+}
+
+export interface CrewSummary {
+  id: string;
+  name: string;
+  role: string;
+  department: string;
+  email: string;
+  phone: string;
+}
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const response = await fetch(`${API_BASE}/projects`);
+  if (!response.ok) throw new Error('Failed to fetch projects');
+  return response.json();
+}
+
+export async function listCrew(): Promise<CrewSummary[]> {
+  const response = await fetch(`${API_BASE}/crew`);
+  if (!response.ok) throw new Error('Failed to fetch crew');
+  return response.json();
+}

@@ -14,10 +14,10 @@ interface WeatherCardProps {
 
 const weatherConfigs = {
   Sunny: {
-    gradient: "linear-gradient(135deg, #E8F4FD 0%, #D4ECFC 50%, #E0F2FE 100%)",
+    gradient: "linear-gradient(135deg, #0A1628 0%, #0D1F35 50%, #0A1E30 100%)",
     isDark: false,
     Icon: Sun,
-    iconColor: "#F59E0B",
+    iconColor: "#FBBF24",
     label: "Sunny",
   },
   Clear: {
@@ -28,14 +28,14 @@ const weatherConfigs = {
     label: "Clear",
   },
   Cloudy: {
-    gradient: "linear-gradient(135deg, #F0F2F5 0%, #E4E7EB 50%, #D9DEE4 100%)",
+    gradient: "linear-gradient(135deg, #141414 0%, #1A1A1A 50%, #111111 100%)",
     isDark: false,
     Icon: Cloud,
     iconColor: "#9CA3AF",
     label: "Cloudy",
   },
   Rain: {
-    gradient: "linear-gradient(135deg, #E8EEF5 0%, #D6E0EB 50%, #C9D6E3 100%)",
+    gradient: "linear-gradient(135deg, #0C1219 0%, #111820 50%, #0E1520 100%)",
     isDark: false,
     Icon: CloudRain,
     iconColor: "#6B87A8",
@@ -45,21 +45,21 @@ const weatherConfigs = {
 
 const nightConfigs: Partial<Record<WeatherCondition, typeof weatherConfigs.Sunny>> = {
   Sunny: {
-    gradient: "linear-gradient(135deg, #E8EDF4 0%, #D8E1EC 50%, #C8D4E4 100%)",
+    gradient: "linear-gradient(135deg, #060B14 0%, #0A1020 50%, #070D1A 100%)",
     isDark: false,
     Icon: Moon,
     iconColor: "#7C8BA8",
     label: "Clear Night",
   },
   Cloudy: {
-    gradient: "linear-gradient(135deg, #E5E9EF 0%, #D5DBE5 50%, #C5CED9 100%)",
+    gradient: "linear-gradient(135deg, #0F0F0F 0%, #151515 50%, #111111 100%)",
     isDark: false,
     Icon: CloudMoon,
     iconColor: "#8B95A5",
     label: "Cloudy Night",
   },
   Rain: {
-    gradient: "linear-gradient(135deg, #E3E9F0 0%, #D1DAE5 50%, #C0CCDA 100%)",
+    gradient: "linear-gradient(135deg, #0A1018 0%, #0E1620 50%, #0C141C 100%)",
     isDark: false,
     Icon: CloudRain,
     iconColor: "#6B87A8",
@@ -81,8 +81,8 @@ export function WeatherCard({
     return weatherConfigs[weatherCondition] || weatherConfigs.Sunny;
   }, [weatherCondition, isDaytime]);
 
-  const textColor = config.isDark ? "text-white" : "text-gray-800";
-  const mutedTextColor = config.isDark ? "text-white/70" : "text-gray-600";
+  const textColor = "text-foreground";
+  const mutedTextColor = "text-muted-foreground";
   const Icon = config.Icon;
 
   return (

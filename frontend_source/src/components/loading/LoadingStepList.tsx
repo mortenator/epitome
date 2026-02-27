@@ -71,11 +71,11 @@ export function LoadingStepList({ progress, error }: LoadingStepListProps) {
   if (error) {
     return (
       <div className="space-y-1">
-        <div className="mb-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-red-950/40 border border-red-800/50 px-3 py-2">
           <div className="h-4 w-4 rounded-full bg-red-500" />
-          <span className="text-sm text-red-700">Error</span>
+          <span className="text-sm text-red-400">Error</span>
         </div>
-        <p className="text-sm text-red-600 px-3">{error}</p>
+        <p className="text-sm text-red-400 px-3">{error}</p>
       </div>
     );
   }

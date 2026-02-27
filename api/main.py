@@ -20,12 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.progress import ProgressEvent, progress_manager
-from api.database import get_db, AsyncSessionLocal
+from api.database import get_db, AsyncSessionLocal, Project, CrewMember
 from api.services import (
     create_project_from_generation,
     get_project_for_frontend,
@@ -512,6 +513,46 @@ async def get_generation_data(job_id: str):
         "locations": locations,
         "departments": departments,
     }
+
+
+
+@app.get("/api/projects")
+async def list_projects(db: AsyncSession = Depends(get_db)):
+    """List all projects."""
+    result = await db.execute(
+        select(Project).order_by(Project.created_at.desc())
+    )
+    projects = result.scalars().all()
+    return [
+        {
+            "id": str(p.id),
+            "jobName": p.job_name or "Untitled",
+            "client": p.client or "",
+            "status": p.status or "ACTIVE",
+            "createdAt": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in projects
+    ]
+
+
+@app.get("/api/crew")
+async def list_crew(db: AsyncSession = Depends(get_db)):
+    """List all crew members in the organization."""
+    result = await db.execute(
+        select(CrewMember).order_by(CrewMember.name)
+    )
+    crew = result.scalars().all()
+    return [
+        {
+            "id": str(c.id),
+            "name": c.name or "",
+            "role": c.role or "",
+            "department": c.department or "",
+            "email": c.email or "",
+            "phone": c.phone or "",
+        }
+        for c in crew
+    ]
 
 
 @app.get("/api/project/{project_id}")

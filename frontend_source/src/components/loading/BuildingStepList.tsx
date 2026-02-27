@@ -48,7 +48,7 @@ export function BuildingStepList({ progress, error }: BuildingStepListProps) {
     return (
       <div className="flex flex-col items-center gap-4">
         <AlertCircle className="h-12 w-12 text-red-500" />
-        <p className="text-sm text-red-600 text-center max-w-xs">{error}</p>
+        <p className="text-sm text-red-400 text-center max-w-xs">{error}</p>
       </div>
     );
   }
