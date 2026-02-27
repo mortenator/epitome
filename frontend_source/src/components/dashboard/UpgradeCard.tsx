@@ -52,7 +52,7 @@ export function UpgradeCard({ userName, userRole, avatarUrl, collapsed = false }
       </div>
 
       {/* Upgrade Button */}
-      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm transition-colors hover:bg-white/30">
+      <button className="btn flex w-full items-center justify-center gap-2 rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm transition-colors hover:bg-white/30">
         <Sparkles className="h-5 w-5" />
         <span className="font-medium">Upgrade Now</span>
       </button>

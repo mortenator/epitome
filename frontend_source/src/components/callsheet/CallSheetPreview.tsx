@@ -150,7 +150,7 @@ export function CallSheetPreview({
     return (
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <div className="flex flex-1 items-center justify-center bg-white">
+        <div className="flex flex-1 items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
             <p className="text-sm text-muted-foreground">Loading call sheet...</p>
@@ -165,7 +165,7 @@ export function CallSheetPreview({
     return (
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <div className="flex flex-1 items-center justify-center bg-white">
+        <div className="flex flex-1 items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-3 max-w-md text-center">
             <p className="text-lg font-medium text-red-600">Failed to load call sheet</p>
             <p className="text-sm text-muted-foreground">
@@ -199,7 +199,7 @@ export function CallSheetPreview({
       />
 
       {/* Call Sheet Content */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto bg-white p-4 md:p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-auto bg-background p-4 md:p-6">
         <div className="mx-auto max-w-5xl min-w-0">
           {/* Header */}
           <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -210,7 +210,7 @@ export function CallSheetPreview({
             {projectData?.callSheets && projectData.callSheets.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center justify-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground hover:bg-gray-50 w-full sm:w-auto">
+                  <button className="flex items-center justify-center gap-1 rounded-lg border border-glass-border bg-glass px-3 py-1.5 text-sm text-foreground hover:bg-accent w-full sm:w-auto">
                     Switch Day
                     <ChevronDown className="h-4 w-4" />
                   </button>

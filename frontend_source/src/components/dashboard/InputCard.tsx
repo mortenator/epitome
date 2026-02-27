@@ -94,7 +94,7 @@ export function InputCard() {
 
   return (
     <motion.div
-      className={`w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-3xl bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)] transition-all ${
+      className={`w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-3xl bg-glass border border-glass-border shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all ${
         isDragging ? 'ring-2 ring-nav-active ring-offset-2' : ''
       }`}
       initial={{ y: 60, opacity: 0 }}
@@ -119,14 +119,14 @@ export function InputCard() {
 
       {/* Drop Zone Area */}
       <div
-        className={`flex flex-col items-center justify-center px-6 py-8 bg-gradient-to-t from-[#f9fafb] to-transparent cursor-pointer transition-colors ${
+        className={`flex flex-col items-center justify-center px-6 py-8 bg-gradient-to-t from-black/20 to-transparent cursor-pointer transition-colors ${
           isDragging ? 'bg-nav-active/5' : ''
         }`}
         onClick={() => fileInputRef.current?.click()}
       >
         {file ? (
           // File preview
-          <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3 bg-glass rounded-xl border border-glass-border shadow-sm">
             <FileText className="h-8 w-8 text-nav-active" />
             <div className="flex flex-col">
               <span className="text-sm font-medium text-foreground">{file.name}</span>
@@ -139,7 +139,7 @@ export function InputCard() {
                 e.stopPropagation();
                 removeFile();
               }}
-              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-1 hover:bg-white/10 rounded-full transition-colors"
             >
               <X className="h-4 w-4 text-nav-inactive" />
             </button>
@@ -201,8 +201,8 @@ export function InputCard() {
             onClick={handleSubmit}
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${
               canSubmit
-                ? "bg-nav-active text-white hover:bg-nav-active/90"
-                : "bg-[#d1d5dc] text-white cursor-not-allowed"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "bg-muted text-muted-foreground cursor-not-allowed"
             }`}
             disabled={!canSubmit}
           >

@@ -59,6 +59,7 @@ export interface CallSheetData {
   dayNumber: number;
   shootDate: string;
   generalCrewCall: string;
+  breakfastCall?: string;
   productionCall?: string;
   talentCall?: string;
   weather: WeatherData;

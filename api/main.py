@@ -443,24 +443,46 @@ async def get_generation_data(job_id: str):
     prod_info = enriched_data.get('production_info', {})
     
     # Format call sheets
+    logistics = enriched_data.get('logistics', {})
+    logistics_hospital = logistics.get('hospital', {})
     schedule_days = enriched_data.get('schedule_days', [])
     call_sheets = []
+
+    def _strip_f(v):
+        """Strip F suffix from temperature string, return numeric string or None."""
+        if not v:
+            return None
+        s = str(v).replace('F', '').replace('f', '').strip()
+        return s if s and s.upper() != 'TBD' else None
+
     for day in schedule_days:
+        # Map weather from enriched_data - handles nested temperature structure
+        day_weather = day.get('weather') or logistics.get('weather') or {}
+        temp = day_weather.get('temperature') or {}
+        weather_high = _strip_f(temp.get('high') or day_weather.get('high'))
+        weather_low = _strip_f(temp.get('low') or day_weather.get('low'))
+        weather_summary = day_weather.get('conditions') or day_weather.get('summary')
+        weather_sunrise = day_weather.get('sunrise')
+        weather_sunset = day_weather.get('sunset')
+
+        # Map hospital from logistics (same for all days in fallback mode)
+        hosp = logistics_hospital or {}
+
         call_sheets.append({
             "id": str(uuid.uuid4()),
             "dayNumber": day.get('day_number', 1),
             "shootDate": day.get('date') if day.get('date') != 'TBD' else None,
             "generalCrewCall": day.get('crew_call', 'TBD'),
             "weather": {
-                "high": None,
-                "low": None,
-                "summary": None,
-                "sunrise": None,
-                "sunset": None,
+                "high": weather_high,
+                "low": weather_low,
+                "summary": weather_summary,
+                "sunrise": weather_sunrise,
+                "sunset": weather_sunset,
             },
             "hospital": {
-                "name": None,
-                "address": None,
+                "name": hosp.get('name'),
+                "address": hosp.get('address'),
             },
         })
     
@@ -647,6 +669,18 @@ async def chat_endpoint(
 
     result = await process_chat_message(db, project_id, message, history_list)
     return result
+
+
+@app.get("/api/db-health")
+async def db_health_check():
+    """Check database connectivity - useful for diagnosing Railway DB issues."""
+    try:
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import text
+            await db.execute(text("SELECT 1"))
+            return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        return {"status": "error", "database": "unreachable", "error": str(e), "type": type(e).__name__}
 
 
 @app.get("/health")

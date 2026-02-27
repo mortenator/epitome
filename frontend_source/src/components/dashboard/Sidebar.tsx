@@ -3,9 +3,9 @@ import { EpitomeLogo } from "./EpitomeLogo";
 import { NavItem } from "./NavItem";
 import { UpgradeCard } from "./UpgradeCard";
 import { AiPenIcon } from "./AiPenIcon";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 const navItems = [
   { id: "home", icon: Home, label: "Home" },
@@ -20,16 +20,15 @@ interface SidebarProps {
   collapsed?: boolean;
   onMobileClose?: () => void;
   animate?: boolean;
+  activeItem: string;
+  setActiveItem: (id: string) => void;
 }
 
-export function Sidebar({ collapsed = false, onMobileClose, animate = true }: SidebarProps) {
-  const [activeItem, setActiveItem] = useState("crew-list");
-
+export function Sidebar({ collapsed = false, onMobileClose, animate = true, activeItem, setActiveItem }: SidebarProps) {
   const sidebarContent = (
     <>
-      {/* Logo with close button on mobile */}
       <div className={cn("py-5 flex items-center justify-between", collapsed ? "px-0" : "px-3")}>
-        <EpitomeLogo collapsed={collapsed} />
+        <EpitomeLogo collapsed={collapsed} monochrome={true} />
         {onMobileClose && !collapsed && (
           <button 
             onClick={onMobileClose}
@@ -39,8 +38,9 @@ export function Sidebar({ collapsed = false, onMobileClose, animate = true }: Si
           </button>
         )}
       </div>
+      
+      {!collapsed && <ProjectSwitcher />}
 
-      {/* Navigation */}
       <nav className={cn("flex-1 space-y-1", collapsed ? "px-0 w-full" : "px-1")}>
         {navItems.map((item, index) => (
           <motion.div
@@ -68,7 +68,6 @@ export function Sidebar({ collapsed = false, onMobileClose, animate = true }: Si
         ))}
       </nav>
 
-      {/* Upgrade Card */}
       <motion.div 
         className="mt-auto"
         initial={animate ? { y: 20, opacity: 0 } : false}

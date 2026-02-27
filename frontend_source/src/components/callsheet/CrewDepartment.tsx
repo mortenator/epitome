@@ -143,9 +143,12 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
             <TableBody>
               {crew.map((member, index) => {
                 const unassigned = isUnassigned(member);
+                const isHidden = hideContactInfo[index] || false;
                 return (
-                <TableRow key={index} className="group hover:bg-gray-50">
-                  <TableCell className="text-sm text-foreground">{member.role}</TableCell>
+                <TableRow key={index} className={`group hover:bg-accent transition-opacity ${isHidden ? "opacity-40" : ""}`}>
+                  <TableCell className="text-sm text-foreground">
+                    <span className={isHidden ? "line-through" : ""}>{member.role}</span>
+                  </TableCell>
                   <TableCell className="text-sm text-foreground relative">
                     {unassigned ? (
                       <div className="relative">
@@ -170,16 +173,16 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
                         />
                       </div>
                     ) : (
-                      member.name
+                      <span className={isHidden ? "line-through" : ""}>{member.name}</span>
                     )}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                    {unassigned ? "—" : member.phone}
+                    {unassigned ? "—" : (isHidden ? "Hidden" : member.phone)}
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                    {unassigned ? "—" : member.email}
+                    {unassigned ? "—" : (isHidden ? "Hidden" : member.email)}
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-blue-500">
+                  <TableCell className="text-sm font-medium text-primary">
                     {unassigned ? (
                       "—"
                     ) : editingCell?.index === index && editingCell?.field === 'callTime' ? (
@@ -189,14 +192,14 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
                           onKeyDown={handleKeyDown}
-                          className="w-20 px-1 py-0.5 text-sm border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-20 px-1 py-0.5 text-sm border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-input"
                           autoFocus
                         />
-                        <button onClick={saveEditing} className="p-0.5 hover:bg-green-100 rounded">
-                          <Check className="h-3 w-3 text-green-600" />
+                        <button onClick={saveEditing} className="p-0.5 hover:bg-green-100/10 rounded">
+                          <Check className="h-3 w-3 text-green-500" />
                         </button>
-                        <button onClick={cancelEditing} className="p-0.5 hover:bg-red-100 rounded">
-                          <X className="h-3 w-3 text-red-600" />
+                        <button onClick={cancelEditing} className="p-0.5 hover:bg-red-100/10 rounded">
+                          <X className="h-3 w-3 text-red-500" />
                         </button>
                       </div>
                     ) : (
@@ -218,14 +221,14 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
                           onKeyDown={handleKeyDown}
-                          className="w-20 px-1 py-0.5 text-sm border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-20 px-1 py-0.5 text-sm border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-input"
                           autoFocus
                         />
-                        <button onClick={saveEditing} className="p-0.5 hover:bg-green-100 rounded">
-                          <Check className="h-3 w-3 text-green-600" />
+                        <button onClick={saveEditing} className="p-0.5 hover:bg-green-100/10 rounded">
+                          <Check className="h-3 w-3 text-green-500" />
                         </button>
-                        <button onClick={cancelEditing} className="p-0.5 hover:bg-red-100 rounded">
-                          <X className="h-3 w-3 text-red-600" />
+                        <button onClick={cancelEditing} className="p-0.5 hover:bg-red-100/10 rounded">
+                          <X className="h-3 w-3 text-red-500" />
                         </button>
                       </div>
                     ) : (

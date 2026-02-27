@@ -64,7 +64,7 @@ export function LoadingContent() {
   return (
     <main className="flex h-full flex-col md:flex-row overflow-hidden">
       {/* Mobile Tab Bar */}
-      <div className="flex md:hidden border-b border-border bg-white">
+      <div className="flex md:hidden border-b border-border bg-background">
         <button
           onClick={() => setActiveTab("chat")}
           className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
@@ -90,7 +90,7 @@ export function LoadingContent() {
       </div>
 
       {/* Left Panel - Chat/Steps */}
-      <div className={`${activeTab === "chat" ? "flex" : "hidden"} md:flex w-full md:w-[400px] flex-col border-r border-border bg-white h-full overflow-hidden`}>
+      <div className={`${activeTab === "chat" ? "flex" : "hidden"} md:flex w-full md:w-[400px] flex-col border-r border-border bg-sidebar h-full overflow-hidden`}>
         {/* Project Header */}
         <div className="flex items-center gap-2 border-b border-border px-4 min-h-[52px]">
           <div className="h-4 w-4 rounded bg-orange-400" />
@@ -103,7 +103,7 @@ export function LoadingContent() {
           
           {/* User Message */}
           <div className="mb-4 flex gap-3">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-gray-300" />
+            <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
             <p className="text-sm text-foreground">
               {prompt}
             </p>
@@ -115,7 +115,7 @@ export function LoadingContent() {
               <span className="text-xs font-bold text-white">E</span>
             </div>
             <div className="flex-1">
-              <p className="mb-1 font-medium text-foreground">Epitone</p>
+              <p className="mb-1 font-medium text-foreground">Epitome</p>
               <p className="mb-3 text-sm text-muted-foreground">
                 Great, I'll review your crew list and craft a call sheet tailored to that shoot
               </p>
@@ -127,7 +127,7 @@ export function LoadingContent() {
         {/* Bottom Input */}
         <div className={`border-t border-border p-4 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 shrink-0 rounded-full bg-gray-300" />
+            <div className="h-10 w-10 shrink-0 rounded-full bg-muted" />
             <div className="flex flex-1 items-center gap-2">
               <span className="text-muted-foreground">+</span>
               <input
@@ -154,7 +154,7 @@ export function LoadingContent() {
         <TopBar />
 
         {/* Preview Content - Building Steps */}
-        <div className="flex flex-1 items-center justify-center bg-[#fafafa]">
+        <div className="flex flex-1 items-center justify-center bg-background">
           <BuildingStepList progress={progress} error={error} />
         </div>
       </div>

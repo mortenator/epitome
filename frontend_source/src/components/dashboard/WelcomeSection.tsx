@@ -1,14 +1,10 @@
-import blueOrb from "@/assets/blue-orb.svg";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { EpitomeOrb } from "./EpitomeOrb";
 
 interface WelcomeSectionProps {
   userName: string;
 }
-
-// Preload the image
-const preloadImage = new Image();
-preloadImage.src = blueOrb;
 
 function TypewriterText({ text, delay = 0, speed = 30 }: { text: string; delay?: number; speed?: number }) {
   const [displayedText, setDisplayedText] = useState("");
@@ -21,7 +17,6 @@ function TypewriterText({ text, delay = 0, speed = 30 }: { text: string; delay?:
 
   useEffect(() => {
     if (!started) return;
-    
     let currentIndex = 0;
     const interval = setInterval(() => {
       if (currentIndex <= text.length) {
@@ -31,7 +26,6 @@ function TypewriterText({ text, delay = 0, speed = 30 }: { text: string; delay?:
         clearInterval(interval);
       }
     }, speed);
-
     return () => clearInterval(interval);
   }, [started, text, speed]);
 
@@ -46,41 +40,27 @@ function TypewriterText({ text, delay = 0, speed = 30 }: { text: string; delay?:
 }
 
 export function WelcomeSection({ userName }: WelcomeSectionProps) {
-  const [imageLoaded, setImageLoaded] = useState(preloadImage.complete);
-
-  useEffect(() => {
-    if (!preloadImage.complete) {
-      preloadImage.onload = () => setImageLoaded(true);
-    }
-  }, []);
-
   return (
     <div className="flex flex-col items-center gap-5 md:gap-7">
-      {/* Orb Image with spin and zoom animation */}
-      <motion.div 
-        className="h-20 w-20 md:h-28 md:w-28 relative"
+      {/* New dark-mode orb */}
+      <motion.div
         initial={{ scale: 0, rotate: -180 }}
         animate={{ scale: 1, rotate: 0 }}
-        transition={{ 
-          duration: 0.8, 
+        transition={{
+          duration: 0.8,
           ease: [0.34, 1.56, 0.64, 1],
-          delay: 0.1
+          delay: 0.1,
         }}
       >
-        <div className="absolute inset-0 rounded-full animate-pulse-glow" />
-        <img 
-          src={blueOrb} 
-          alt="AI Assistant" 
-          className={`relative h-full w-full object-contain transition-opacity duration-200 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-        />
+        <EpitomeOrb size={112} />
       </motion.div>
 
-      {/* Welcome Text with typewriter effect */}
+      {/* Welcome Text */}
       <h1 className="text-3xl md:text-5xl font-normal tracking-tight text-foreground font-display text-center min-h-[1.2em]">
         <TypewriterText text={`Welcome, ${userName}!`} delay={600} speed={40} />
       </h1>
 
-      {/* Subtitle with typewriter effect */}
+      {/* Subtitle */}
       <p className="text-lg md:text-xl text-muted-foreground tracking-tight text-center min-h-[1.5em]">
         <TypewriterText text="How can I help you today?" delay={1400} speed={25} />
       </p>

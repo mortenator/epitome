@@ -1,41 +1,42 @@
-import svgPaths from "@/lib/svg-paths";
-
+/**
+ * EpitomeLogo — Updated to match the pitch deck wordmark.
+ * Clean lowercase sans-serif "epitome" with a teal accent dot, centered on dark backgrounds.
+ */
 interface EpitomeLogoProps {
   collapsed?: boolean;
+  monochrome?: boolean;
 }
 
 export function EpitomeLogo({ collapsed = false }: EpitomeLogoProps) {
   if (collapsed) {
     return (
       <div className="h-[35px] w-[35px] flex items-center justify-center">
-        <span className="text-2xl font-bold text-[#6BA4E8]" style={{ fontFamily: 'system-ui' }}>E</span>
+        {/* Collapsed: just the "e" lettermark in teal */}
+        <span
+          className="text-xl font-semibold tracking-tighter text-primary"
+          style={{ fontFamily: "'Inter', sans-serif", letterSpacing: "-0.05em" }}
+        >
+          e
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="h-[35px] w-[162px]">
-      <svg 
-        className="block size-full" 
-        fill="none" 
-        preserveAspectRatio="none" 
-        viewBox="0 0 162.15 34.5"
-      >
-        <g clipPath="url(#clip0_epitome_logo)">
-          <path d={svgPaths.p22942400} fill="#6BA4E8" />
-          <path d={svgPaths.p3583f600} fill="#6BA4E8" />
-          <path d={svgPaths.p38723980} fill="#6BA4E8" />
-          <path d={svgPaths.p2b548a00} fill="#6BA4E8" />
-          <path d={svgPaths.p23aef080} fill="#6BA4E8" />
-          <path d={svgPaths.p1e6243f0} fill="#6BA4E8" />
-          <path d={svgPaths.p1cf3c600} fill="#6BA4E8" />
-        </g>
-        <defs>
-          <clipPath id="clip0_epitome_logo">
-            <rect fill="white" height="34.5" width="162.15" />
-          </clipPath>
-        </defs>
-      </svg>
+    <div className="h-[35px] flex items-center">
+      {/* Wordmark: lowercase "epitome" matching the pitch deck style */}
+      <div className="flex items-center gap-0.5">
+        <span
+          className="text-[22px] font-light tracking-tight text-foreground"
+          style={{ fontFamily: "'Inter', sans-serif", letterSpacing: "-0.04em" }}
+        >
+          epitome
+        </span>
+        {/* Small teal accent dot — nods to the pitch deck's geometric mark */}
+        <span
+          className="ml-0.5 mb-1 h-[5px] w-[5px] rounded-full bg-primary inline-block flex-shrink-0"
+        />
+      </div>
     </div>
   );
 }

@@ -10,16 +10,15 @@ interface DashboardProps {
 
 export function Dashboard({ children, sidebarCollapsed = false }: DashboardProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeItem, setActiveItem] = useState("crew-list");
 
   return (
     <div className="flex h-screen w-full flex-col md:flex-row bg-background">
-      {/* Mobile Header */}
       <MobileHeader 
         isMenuOpen={isMobileMenuOpen} 
         onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
       />
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 z-40 bg-black/50 md:hidden"
@@ -27,17 +26,20 @@ export function Dashboard({ children, sidebarCollapsed = false }: DashboardProps
         />
       )}
 
-      {/* Sidebar - hidden on mobile unless menu is open */}
       <div className={`
         fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:transform-none
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <Sidebar collapsed={sidebarCollapsed} onMobileClose={() => setIsMobileMenuOpen(false)} />
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onMobileClose={() => setIsMobileMenuOpen(false)}
+          activeItem={activeItem}
+          setActiveItem={setActiveItem}
+        />
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {children || <MainContent />}
+        {children || <MainContent activeItem={activeItem} />}
       </div>
     </div>
   );

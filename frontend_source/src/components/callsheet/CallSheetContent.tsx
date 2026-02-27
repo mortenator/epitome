@@ -23,12 +23,12 @@ export function CallSheetContent() {
   return (
     <main className="flex h-full flex-col md:flex-row overflow-hidden">
       {/* Mobile Tab Bar */}
-      <div className="flex md:hidden border-b border-border bg-white">
+      <div className="flex md:hidden border-b bg-background">
         <button
           onClick={() => setActiveTab("chat")}
           className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
             activeTab === "chat"
-              ? "text-blue-500 border-b-2 border-blue-500"
+              ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground"
           }`}
         >
@@ -39,7 +39,7 @@ export function CallSheetContent() {
           onClick={() => setActiveTab("preview")}
           className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
             activeTab === "preview"
-              ? "text-blue-500 border-b-2 border-blue-500"
+              ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground"
           }`}
         >

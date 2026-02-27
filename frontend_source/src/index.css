@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,150 +6,83 @@
 
 @layer base {
   :root {
-    --font-size: 16px;
-    --background: 0 0% 98%;
-    --foreground: 220 9% 8%;
+    /* Set dark theme as the default, per Epitome brand identity */
+    --background: 180 4% 4%; /* #0A0A0A */
+    --foreground: 0 0% 98%; /* #FAFAFA */
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 9% 8%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 8%;
-
-    --primary: 240 5% 5%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 240 5% 5%;
-
-    --muted: 220 9% 94%;
-    --muted-foreground: 220 9% 46%;
-
-    --accent: 215 20% 93%;
-    --accent-foreground: 240 5% 5%;
-
-    --destructive: 351 82% 46%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 9% 90%;
-    --input: 0 0% 100%;
-    --input-background: 220 9% 95%;
-    --ring: 220 9% 46%;
-
-    --radius: 0.625rem;
-
-    /* Sidebar */
-    --sidebar: 210 29% 95%;
-    --sidebar-foreground: 220 9% 8%;
-    --sidebar-primary: 240 5% 5%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 0 0% 100%;
-    --sidebar-accent-foreground: 220 9% 8%;
-    --sidebar-border: 210 29% 95%;
-    --sidebar-ring: 217 91% 60%;
-
-    /* Custom Epitome colors */
-    --epitome-blue: 212 75% 60%;
-    --epitome-blue-light: 202 100% 93%;
-    --nav-inactive: 220 6% 64%;
-    --nav-active: 220 9% 8%;
-    --badge-bg: 220 9% 12%;
-
-    /* Gradient for upgrade card */
-    --gradient-upgrade-start: 207 78% 63%;
-    --gradient-upgrade-mid: 207 77% 63%;
-    --gradient-upgrade-end: 197 100% 71%;
-    --gradient-upgrade-bottom: 195 100% 93%;
-  }
-
-  .dark {
-    --background: 220 9% 8%;
-    --foreground: 0 0% 98%;
-
-    --card: 220 9% 8%;
+    --card: 180 4% 8%; /* #141414 - Card/Panel Surface */
     --card-foreground: 0 0% 98%;
 
-    --popover: 220 9% 8%;
+    --popover: 180 4% 12%; /* #1E1E1E - Elevated Surface */
     --popover-foreground: 0 0% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 220 9% 12%;
+    /* Brand Accent */
+    --primary: 172 49% 42%; /* #2D8C7E - Epitome Teal */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 6% 17%;
+    --secondary: 180 4% 12%; /* #1E1E1E */
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 6% 17%;
-    --muted-foreground: 220 6% 70%;
+    --muted: 0 0% 60%; /* #9A9A9A */
+    --muted-foreground: 0 0% 40%; /* #666666 */
 
-    --accent: 220 6% 17%;
+    --accent: 180 4% 12%; /* #1E1E1E */
     --accent-foreground: 0 0% 98%;
 
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 6% 17%;
-    --input: 220 6% 17%;
-    --ring: 220 6% 44%;
+    --border: 180 4% 16%; /* #292929 */
+    --input: 180 4% 10%; /* #1A1A1A */
+    --input-background: 180 4% 10%;
+    --ring: 172 49% 42%; /* Epitome Teal */
 
-    --sidebar: 220 9% 10%;
+    --radius: 0.625rem;
+
+    /* Sidebar Customizations */
+    --sidebar: 180 4% 6%; /* #0F0F0F */
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 217 91% 48%;
+    --sidebar-primary: 172 49% 42%; /* Epitome Teal */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 6% 17%;
+    --sidebar-accent: 180 4% 12%; /* #1E1E1E */
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 220 6% 17%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 180 4% 16%;
+    --sidebar-ring: 172 49% 42%;
+
+    /* Custom Tokens from Design System */
+    --epitome-teal: 172 49% 42%;
+    --epitome-teal-light: 172 49% 52%; /* Lighter for hover */
+    --nav-inactive: 0 0% 60%; /* #9A9A9A */
+    --nav-active: 0 0% 98%;
+    --badge-bg: 180 4% 12%;
+
+    /* New "glass" treatment for cards and popovers */
+    --glass: 180 4% 10%; /* #1A1A1A - Darker, more subtle card */
+    --glass-foreground: 0 0% 98%;
+    --glass-border: 180 4% 14%; /* #242424 - A slightly lighter border for definition */
   }
+
+  /* Remove the .dark class wrapper as dark is now the default */
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-
-  html {
-    font-size: var(--font-size);
-  }
-
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', sans-serif;
-  }
-
-  h1 {
-    font-family: 'Inter Tight', 'Inter', sans-serif;
-    @apply text-4xl font-normal tracking-tight;
-  }
-
-  h2 {
-    @apply text-xl font-medium;
-  }
-
-  h3 {
-    @apply text-lg font-medium;
+    @apply bg-background text-foreground;
   }
 }
 
-@layer utilities {
-  .text-nav-inactive {
-    color: hsl(var(--nav-inactive));
+@layer components {
+  /* Add smooth transitions and subtle hover effects to buttons */
+  .btn {
+    @apply transition-all duration-200 ease-in-out;
   }
-
-  .text-nav-active {
-    color: hsl(var(--nav-active));
+  .btn:hover {
+    @apply transform-gpu scale-[1.03];
   }
-
-  .bg-upgrade-gradient {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--gradient-upgrade-start)) 0%,
-      hsl(var(--gradient-upgrade-mid)) 61.538%,
-      hsl(var(--gradient-upgrade-end)) 84.135%,
-      hsl(var(--gradient-upgrade-bottom)) 100%
-    );
-  }
-
-  .bg-epitome-blue {
-    background-color: hsl(var(--epitome-blue));
+  .btn:active {
+    @apply scale-[0.98];
   }
 }
