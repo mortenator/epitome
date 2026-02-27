@@ -227,7 +227,7 @@ export function ChatPanel({ onRegenerate }: ChatPanelProps) {
   const projectName = projectData?.project?.jobName || "EPITOME SAMPLE";
 
   return (
-    <div className="flex w-full md:w-[400px] flex-col border-r border-border bg-white h-full overflow-hidden">
+    <div className="flex w-full md:w-[400px] flex-col border-r border-border bg-background h-full overflow-hidden">
       {/* Project Header */}
       <div className="flex items-center gap-2 border-b border-border px-4 min-h-[52px] shrink-0">
         <div className="h-4 w-4 rounded bg-orange-400" />
@@ -245,7 +245,7 @@ export function ChatPanel({ onRegenerate }: ChatPanelProps) {
           >
             {message.type === "user" ? (
               <>
-                <div className="h-8 w-8 shrink-0 rounded-full bg-gray-300" />
+                <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
                 <div className="flex-1">
                   <p className="text-sm text-foreground">{message.content}</p>
                 </div>
@@ -293,7 +293,7 @@ export function ChatPanel({ onRegenerate }: ChatPanelProps) {
           }}
           className="flex items-center gap-3"
         >
-          <div className="h-10 w-10 shrink-0 rounded-full bg-gray-300" />
+          <div className="h-10 w-10 shrink-0 rounded-full bg-muted" />
           <div className="flex flex-1 items-center gap-2">
             <input
               ref={inputRef}

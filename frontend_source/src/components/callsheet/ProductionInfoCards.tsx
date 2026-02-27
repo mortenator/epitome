@@ -186,7 +186,7 @@ export function ProductionInfoCards({ project: initialProject, callSheet, locati
               <img
                 src={project.clientLogoUrl}
                 alt={`${project.client} logo`}
-                className="h-10 w-10 rounded object-contain bg-white flex-shrink-0"
+                className="h-10 w-10 rounded object-contain bg-card flex-shrink-0"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}

@@ -99,10 +99,10 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
   };
 
   return (
-    <div className="rounded-lg border border-border bg-white">
+    <div className="rounded-lg border border-border bg-card">
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-gray-50"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-accent"
       >
         {expanded ? (
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -243,11 +243,11 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="h-8 w-8 rounded-md p-0 opacity-0 hover:bg-gray-100 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button className="h-8 w-8 rounded-md p-0 opacity-0 hover:bg-accent group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <MoreVertical className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-72 bg-white z-50">
+                      <DropdownMenuContent align="end" className="w-72 bg-popover z-50">
                         <DropdownMenuItem className="flex items-center gap-2 cursor-pointer">
                           <User className="h-4 w-4" />
                           <span>See Profile</span>
@@ -277,7 +277,7 @@ export function CrewDepartment({ name, count, crew, expanded, onToggle, onAddPer
                               }));
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="data-[state=unchecked]:bg-[#E5E7EB]"
+                            className="data-[state=unchecked]:bg-muted"
                           />
                         </div>
                         <DropdownMenuItem className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600">

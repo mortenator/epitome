@@ -18,7 +18,7 @@ export function TopBar({
   const isDisabled = isRegenerating || !downloadEnabled;
 
   return (
-    <div className="flex items-center justify-between border-b border-border bg-white px-3 md:px-4 min-h-[52px]">
+    <div className="flex items-center justify-between border-b border-border bg-background px-3 md:px-4 min-h-[52px]">
       <div className="flex items-center gap-2 rounded-lg border border-border px-2 md:px-3 py-1.5">
         <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

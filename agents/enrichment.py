@@ -35,6 +35,149 @@ _weather_cache = {}  # (lat, lng, date) -> weather dict
 _logo_cache = {}     # company_name -> logo_url
 
 
+
+def get_location_coordinates_nominatim(address: str) -> Optional[dict]:
+    """
+    Fallback geocoder using OpenStreetMap Nominatim (no API key required).
+    Rate limited to 1 req/sec per OSM policy.
+    """
+    if not address or address.upper() == 'TBD':
+        return None
+    try:
+        params = urllib.parse.urlencode({
+            'q': address,
+            'format': 'json',
+            'limit': 1
+        })
+        url = f"https://nominatim.openstreetmap.org/search?{params}"
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'EpitomeProductionAI/1.0 (withepitome.com)')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            results = json.loads(response.read().decode())
+        if results:
+            r = results[0]
+            return {
+                'lat': float(r['lat']),
+                'lng': float(r['lon']),
+                'formatted_address': r.get('display_name', address)
+            }
+    except Exception as e:
+        print(f"Warning: Nominatim fallback geocoding failed for '{address}': {e}")
+    return None
+
+
+def get_weather_openmeteo(lat: float, lng: float, date: str) -> Optional[dict]:
+    """
+    Fallback weather using Open-Meteo (free, no API key required).
+    Returns weather data for dates up to 16 days in the future.
+    """
+    if lat is None or lng is None:
+        return None
+    try:
+        from datetime import datetime as _dt
+        target = _dt.strptime(date, '%Y-%m-%d')
+        today = _dt.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        days_ahead = (target - today).days
+        if days_ahead < 0 or days_ahead > 16:
+            return None
+
+        params = urllib.parse.urlencode({
+            'latitude': lat,
+            'longitude': lng,
+            'daily': 'temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset,weathercode',
+            'temperature_unit': 'fahrenheit',
+            'wind_speed_unit': 'mph',
+            'timezone': 'auto',
+            'start_date': date,
+            'end_date': date,
+        })
+        url = f"https://api.open-meteo.com/v1/forecast?{params}"
+        with urllib.request.urlopen(url, timeout=10) as response:
+            data = json.loads(response.read().decode())
+
+        daily = data.get('daily', {})
+        if not daily or not daily.get('time'):
+            return None
+
+        def fmt_temp(val):
+            return f"{round(val)}F" if val is not None else 'TBD'
+
+        def fmt_time(iso):
+            if not iso:
+                return ''
+            try:
+                from datetime import datetime as _dt2
+                t = _dt2.fromisoformat(iso)
+                return t.strftime('%I:%M %p').lstrip('0')
+            except Exception:
+                return iso
+
+        wmo_map = {
+            0: 'Clear', 1: 'Mostly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+            45: 'Fog', 48: 'Icy Fog', 51: 'Light Drizzle', 53: 'Drizzle',
+            55: 'Heavy Drizzle', 61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
+            71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow', 80: 'Rain Showers',
+            95: 'Thunderstorm', 99: 'Severe Thunderstorm'
+        }
+        wcode = daily.get('weathercode', [None])[0]
+        conditions = wmo_map.get(wcode, 'Unknown') if wcode is not None else 'Unknown'
+
+        return {
+            'date': date,
+            'sunrise': fmt_time(daily.get('sunrise', [''])[0]),
+            'sunset': fmt_time(daily.get('sunset', [''])[0]),
+            'temperature': {
+                'high': fmt_temp(daily.get('temperature_2m_max', [None])[0]),
+                'low': fmt_temp(daily.get('temperature_2m_min', [None])[0]),
+            },
+            'conditions': conditions,
+            'wind': 'TBD',
+        }
+    except Exception as e:
+        print(f"Warning: Open-Meteo fallback weather failed for {date}: {e}")
+    return None
+
+
+def find_nearest_hospital_osm(lat: float, lng: float) -> Optional[dict]:
+    """
+    Fallback hospital lookup using OpenStreetMap Overpass API (no API key required).
+    """
+    if lat is None or lng is None:
+        return None
+    try:
+        # Overpass query: hospitals within 25km
+        query = f"""
+[out:json][timeout:10];
+(
+  node["amenity"="hospital"](around:25000,{lat},{lng});
+  way["amenity"="hospital"](around:25000,{lat},{lng});
+);
+out center 1;
+"""
+        encoded = urllib.parse.urlencode({'data': query})
+        url = f"https://overpass-api.de/api/interpreter?{encoded}"
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'EpitomeProductionAI/1.0 (withepitome.com)')
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+        elements = data.get('elements', [])
+        if elements:
+            el = elements[0]
+            tags = el.get('tags', {})
+            name = tags.get('name', 'Nearest Hospital')
+            addr_parts = []
+            for k in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state']:
+                v = tags.get(k)
+                if v:
+                    addr_parts.append(v)
+            address = ', '.join(addr_parts) if addr_parts else f"Near {lat:.4f}, {lng:.4f}"
+            print(f"[Hospital OSM] Found: {name}")
+            return {'name': name, 'address': address}
+    except Exception as e:
+        print(f"Warning: OSM hospital fallback failed: {e}")
+    return None
+
+
 def get_location_coordinates(address: str) -> Optional[dict]:
     """
     Get GPS coordinates for an address using Google Maps Geocoding API.
@@ -80,7 +223,12 @@ def get_location_coordinates(address: str) -> Optional[dict]:
     except Exception as e:
         print(f"Warning: Failed to geocode address '{address}': {e}")
 
-    return None
+    # Fallback to Nominatim (OpenStreetMap) if Google Maps API is unavailable or failed
+    print(f"Falling back to Nominatim geocoder for: {address}")
+    result = get_location_coordinates_nominatim(address)
+    if result:
+        _geocode_cache[cache_key] = result
+    return result
 
 
 def find_nearest_hospital(lat: float, lng: float) -> Optional[dict]:
@@ -173,7 +321,9 @@ def find_nearest_hospital(lat: float, lng: float) -> Optional[dict]:
     except Exception as e:
         print(f"Warning: Failed to find nearest hospital: {e}")
 
-    return None
+    # Fallback: try OpenStreetMap Overpass API
+    print(f"Falling back to OSM hospital lookup near ({lat}, {lng})")
+    return find_nearest_hospital_osm(lat, lng)
 
 
 def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
@@ -430,7 +580,12 @@ def get_weather_data(lat: float, lng: float, date: str) -> Optional[dict]:
     except Exception as e:
         print(f"Warning: Failed to get weather data for {date}: {type(e).__name__}: {e}")
 
-    return None
+    # Fallback: try Open-Meteo (free, no API key needed)
+    print(f"Falling back to Open-Meteo for weather on {date}")
+    result = get_weather_openmeteo(lat, lng, date)
+    if result:
+        _weather_cache[cache_key] = result
+    return result
 
 
 def get_company_logo(company_name: str) -> Optional[str]:

@@ -15,7 +15,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
-        display: ['Inter Tight', 'Inter', 'sans-serif'],
+        display: ['Playfair Display', 'Georgia', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -65,7 +65,15 @@ export default {
         "nav-inactive": "hsl(var(--nav-inactive))",
         "nav-active": "hsl(var(--nav-active))",
         "badge-bg": "hsl(var(--badge-bg))",
-        "epitome-blue": "hsl(var(--epitome-blue))",
+
+        /* Additions from Design System */
+        'epitome-teal': 'hsl(var(--epitome-teal))',
+        'epitome-teal-light': 'hsl(var(--epitome-teal-light))',
+        'glass': {
+          DEFAULT: 'hsl(var(--glass))',
+          foreground: 'hsl(var(--glass-foreground))',
+          border: 'hsl(var(--glass-border))',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -83,10 +91,10 @@ export default {
         },
         "pulse-glow": {
           "0%, 100%": { 
-            boxShadow: "0 0 20px 8px rgba(107, 164, 232, 0.3)",
+            boxShadow: "0 0 20px 8px hsla(var(--epitome-teal), 0.3)",
           },
           "50%": { 
-            boxShadow: "0 0 40px 16px rgba(107, 164, 232, 0.5)",
+            boxShadow: "0 0 40px 16px hsla(var(--epitome-teal), 0.5)",
           },
         },
       },

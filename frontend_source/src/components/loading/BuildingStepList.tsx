@@ -79,7 +79,7 @@ export function BuildingStepList({ progress, error }: BuildingStepListProps) {
       {/* Progress bar */}
       {progress && (
         <div className="mt-4 w-48">
-          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full transition-all duration-300"
               style={{ width: `${progress.percent}%` }}
