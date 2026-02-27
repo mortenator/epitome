@@ -520,16 +520,16 @@ async def get_generation_data(job_id: str):
 async def list_projects(db: AsyncSession = Depends(get_db)):
     """List all projects."""
     result = await db.execute(
-        select(Project).order_by(Project.created_at.desc())
+        select(Project).order_by(Project.createdAt.desc())
     )
     projects = result.scalars().all()
     return [
         {
             "id": str(p.id),
-            "jobName": p.job_name or "Untitled",
+            "jobName": p.jobName or "Untitled",
             "client": p.client or "",
             "status": p.status or "ACTIVE",
-            "createdAt": p.created_at.isoformat() if p.created_at else None,
+            "createdAt": p.createdAt.isoformat() if p.createdAt else None,
         }
         for p in projects
     ]
@@ -539,14 +539,14 @@ async def list_projects(db: AsyncSession = Depends(get_db)):
 async def list_crew(db: AsyncSession = Depends(get_db)):
     """List all crew members in the organization."""
     result = await db.execute(
-        select(CrewMember).order_by(CrewMember.name)
+        select(CrewMember).order_by(CrewMember.firstName)
     )
     crew = result.scalars().all()
     return [
         {
             "id": str(c.id),
-            "name": c.name or "",
-            "role": c.role or "",
+            "name": f"{c.firstName} {c.lastName}".strip(),
+            "role": c.primaryRole or "",
             "department": c.department or "",
             "email": c.email or "",
             "phone": c.phone or "",
